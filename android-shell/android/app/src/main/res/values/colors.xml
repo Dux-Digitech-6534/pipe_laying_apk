@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DUX brand: Iris (interactive) and Cyan (data). -->
+    <color name="colorPrimary">#5C4DE6</color>
+    <color name="colorPrimaryDark">#4A3CD0</color>
+    <color name="colorAccent">#0E9C8B</color>
+
+    <!-- System bars sit outside the WebView. Kept white so the app's own light
+         header reads as continuous with them; the SPA sets <meta theme-color>
+         for the browser/PWA case. -->
+    <color name="systemBar">#FFFFFF</color>
+</resources>

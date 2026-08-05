@@ -1,0 +1,21 @@
+<!-- no-cache -->
+<!-- no-breadcrumbs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pipe Laying</title>
+<!-- The app's canonical entry is /pipe-laying/m: the service worker is scoped
+     to /pipe-laying/ so that it can control the page for offline cold start,
+     and a bare /pipe-laying sits just outside that scope. Send everyone to the
+     one URL that is fully offline-capable. -->
+<meta http-equiv="refresh" content="0; url=/pipe-laying/m">
+<link rel="canonical" href="/pipe-laying/m">
+<meta name="robots" content="noindex, nofollow">
+<style>html,body{margin:0;height:100%;background:#F3F4F7}</style>
+</head>
+<body>
+<script>location.replace('/pipe-laying/m' + location.hash);</script>
+<noscript><a href="/pipe-laying/m">Open Pipe Laying</a></noscript>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "Pipe Laying — Pour Card",
+  "short_name": "Pipe Laying",
+  "description": "Pour Card entry for pipe laying site work. Works offline.",
+  "start_url": "/pipe-laying/m",
+  "scope": "/pipe-laying/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F4F7",
+  "theme_color": "#5C4DE6",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/assets/pipe_laying_inhouse/plm/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pipe_laying_inhouse/plm/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pipe_laying_inhouse/plm/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

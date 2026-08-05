@@ -1,0 +1,26 @@
+{
+  "appId": "com.dux.pipelaying",
+  "appName": "Pipe Laying",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://jewipl.duxdigitech.in/pipe-laying/m",
+    "cleartext": false,
+    "allowNavigation": ["jewipl.duxdigitech.in"],
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 900,
+      "launchAutoHide": true,
+      "backgroundColor": "#5C4DE6",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    }
+  }
+}

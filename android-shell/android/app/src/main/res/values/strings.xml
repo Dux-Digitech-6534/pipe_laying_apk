@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pipe Laying</string>
+    <string name="title_activity_main">Pipe Laying</string>
+    <string name="package_name">com.dux.pipelaying</string>
+    <string name="custom_url_scheme">com.dux.pipelaying</string>
+</resources>
