@@ -468,6 +468,58 @@ def get_masters():
 
 
 @frappe.whitelist()
+def mt_masters():
+    """Warehouses + companies for the Material Transfer screen.
+
+    get_list (not get_all) so the user's User Permissions apply — a user scoped
+    to a Company sees only that company's warehouses, exactly like the desk
+    Warehouse link field. `can_create`/`can_submit` mirror the real Stock Entry
+    permission gates (save/submit enforce them server-side regardless).
+    """
+    _require("read")
+
+    return {
+        "warehouses": frappe.get_list(
+            "Warehouse",
+            filters={"is_group": 0, "disabled": 0},
+            fields=["name", "warehouse_name", "company"],
+            order_by="name",
+            limit_page_length=0,
+        ),
+        "companies": frappe.get_list(
+            "Company", fields=["name", "abbr"], order_by="name", limit_page_length=0
+        ),
+        "default_company": frappe.defaults.get_user_default("company") or _default_company(),
+        "can_create": bool(frappe.has_permission("Stock Entry", "create")),
+        "can_submit": bool(frappe.has_permission("Stock Entry", "submit")),
+    }
+
+
+@frappe.whitelist()
+def item_search(q=None, limit=25):
+    """Server-side Item search for the transfer item picker — there are 3000+
+    items, far too many to ship to the phone. Matches item code or name,
+    permission-scoped via get_list."""
+    _require("read")
+
+    text = (q or "").strip()
+    filters = {"disabled": 0}
+    or_filters = None
+    if text:
+        like = "%{0}%".format(text)
+        or_filters = {"name": ["like", like], "item_name": ["like", like]}
+
+    return frappe.get_list(
+        "Item",
+        filters=filters,
+        or_filters=or_filters,
+        fields=["name", "item_name", "stock_uom", "item_group"],
+        order_by="modified desc",
+        limit_page_length=cint(limit) or 25,
+    )
+
+
+@frappe.whitelist()
 def list_cards(search=None, status=None, project=None, limit=200, start=0):
     """Pour Card list screen. Permission-scoped: get_list only returns rows the
     session user may read, so calling this endpoint directly leaks nothing."""

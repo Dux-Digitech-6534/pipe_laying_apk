@@ -10,6 +10,7 @@ import { Home } from './screens/Home';
 import { Login } from './screens/Login';
 import { Cards } from './screens/Cards';
 import { NewCard } from './screens/NewCard';
+import { MaterialTransfer } from './screens/MaterialTransfer';
 import { CardDetailScreen } from './screens/CardDetail';
 import { LayingDetails } from './screens/LayingDetails';
 import { Backfilling } from './screens/Backfilling';
@@ -18,6 +19,7 @@ import { Settings } from './screens/Settings';
 import { ToastHost } from './components/Feedback';
 import {
   IconAlert,
+  IconBox,
   IconChevronLeft,
   IconCloudCheck,
   IconCloudOff,
@@ -179,6 +181,7 @@ function AppBar({ route, card }: { route: Route; card: CardDetail | null }) {
     home: t('app_name'),
     cards: t('nav_cards'),
     new: t('new_pour_card'),
+    transfer: t('material_transfer'),
     card: card?.name ?? t('card_detail'),
     laying: t('laying_details'),
     backfill: t('backfilling'),
@@ -283,6 +286,8 @@ function Screen({
       return <Cards initialStatus={route.status} />;
     case 'new':
       return <NewCard />;
+    case 'transfer':
+      return <MaterialTransfer />;
     case 'card':
       return (
         <CardDetailScreen
@@ -308,6 +313,7 @@ function Screen({
 
 function TabBar({ route }: { route: Route }) {
   const { t, syncState, caps } = useStore();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // The bottom bar stays put on tab screens. On a pushed screen (a form with its
   // own sticky action bar) it would compete with the primary action.
@@ -315,55 +321,93 @@ function TabBar({ route }: { route: Route }) {
 
   const pending = syncState.queued + syncState.failed;
 
+  const go = (next: Route) => {
+    setMenuOpen(false);
+    navigate(next);
+  };
+
   return (
-    <div className="tabbar">
-      <button
-        className={`tab${route.name === 'home' ? ' active' : ''}`}
-        onClick={() => navigate({ name: 'home' })}
-      >
-        <IconHome />
-        <span>{t('nav_home')}</span>
-      </button>
+    <>
+      {/* The centre + is a "create" menu: it offers both a Pour Card and a
+          Material Transfer, so neither needs its own bottom-bar slot. */}
+      {menuOpen ? (
+        <div className="fab-scrim" onClick={() => setMenuOpen(false)}>
+          <div className="fab-menu" role="menu" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="fab-menu-item"
+              onClick={() => go({ name: 'new' })}
+              disabled={!caps.create}
+            >
+              <span className="fmi-ic">
+                <IconLayers />
+              </span>
+              <span className="fmi-tx">
+                <b>{t('new_pour_card')}</b>
+                <small>{t('new_pour_card_sub')}</small>
+              </span>
+            </button>
+            <button className="fab-menu-item" onClick={() => go({ name: 'transfer' })}>
+              <span className="fmi-ic">
+                <IconBox />
+              </span>
+              <span className="fmi-tx">
+                <b>{t('new_material_transfer')}</b>
+                <small>{t('new_material_transfer_sub')}</small>
+              </span>
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      <button
-        className={`tab${route.name === 'cards' ? ' active' : ''}`}
-        onClick={() => navigate({ name: 'cards' })}
-      >
-        <IconLayers />
-        <span>{t('nav_cards')}</span>
-      </button>
+      <div className="tabbar">
+        <button
+          className={`tab${route.name === 'home' ? ' active' : ''}`}
+          onClick={() => go({ name: 'home' })}
+        >
+          <IconHome />
+          <span>{t('nav_home')}</span>
+        </button>
 
-      <button
-        className={`tab fab${route.name === 'new' ? ' active' : ''}`}
-        onClick={() => navigate({ name: 'new' })}
-        disabled={!caps.create}
-        aria-label={t('new_pour_card')}
-      >
-        <span className="fab-c">
-          <IconPlus />
-        </span>
-      </button>
+        <button
+          className={`tab${route.name === 'cards' ? ' active' : ''}`}
+          onClick={() => go({ name: 'cards' })}
+        >
+          <IconLayers />
+          <span>{t('nav_cards')}</span>
+        </button>
 
-      <button
-        className={`tab${route.name === 'sync' ? ' active' : ''}`}
-        onClick={() => navigate({ name: 'sync' })}
-      >
-        {syncState.syncing ? <IconRefresh className="spin" /> : <IconSync />}
-        <span>{t('nav_sync')}</span>
-        {pending ? (
-          <span className={`tab-badge${syncState.failed ? ' err' : ''}`}>
-            {pending > 99 ? '99+' : pending}
+        <button
+          className={`tab fab${route.name === 'new' ? ' active' : ''}${menuOpen ? ' menu-open' : ''}`}
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={t('create_new')}
+          aria-expanded={menuOpen}
+        >
+          <span className="fab-c">
+            <IconPlus />
           </span>
-        ) : null}
-      </button>
+        </button>
 
-      <button
-        className={`tab${route.name === 'settings' ? ' active' : ''}`}
-        onClick={() => navigate({ name: 'settings' })}
-      >
-        <IconSettings />
-        <span>{t('nav_settings')}</span>
-      </button>
-    </div>
+        <button
+          className={`tab${route.name === 'sync' ? ' active' : ''}`}
+          onClick={() => go({ name: 'sync' })}
+        >
+          {syncState.syncing ? <IconRefresh className="spin" /> : <IconSync />}
+          <span>{t('nav_sync')}</span>
+          {pending ? (
+            <span className={`tab-badge${syncState.failed ? ' err' : ''}`}>
+              {pending > 99 ? '99+' : pending}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          className={`tab${route.name === 'settings' ? ' active' : ''}`}
+          onClick={() => go({ name: 'settings' })}
+        >
+          <IconSettings />
+          <span>{t('nav_settings')}</span>
+        </button>
+      </div>
+    </>
   );
 }

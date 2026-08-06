@@ -15,6 +15,7 @@ export type Route =
   | { name: 'cards'; status?: string }
   | { name: 'card'; id: string }
   | { name: 'new' }
+  | { name: 'transfer' }
   | { name: 'laying'; id: string }
   | { name: 'backfill'; id: string }
   | { name: 'sync' }
@@ -34,6 +35,8 @@ export function parseHash(hash: string): Route {
       return tail ? { name: 'card', id: decodeURIComponent(tail) } : { name: 'cards' };
     case 'new':
       return { name: 'new' };
+    case 'transfer':
+      return { name: 'transfer' };
     case 'laying':
       return tail ? { name: 'laying', id: decodeURIComponent(tail) } : { name: 'cards' };
     case 'backfill':
@@ -57,6 +60,8 @@ export function routeToHash(route: Route): string {
       return `#/card/${encodeURIComponent(route.id)}`;
     case 'new':
       return '#/new';
+    case 'transfer':
+      return '#/transfer';
     case 'laying':
       return `#/laying/${encodeURIComponent(route.id)}`;
     case 'backfill':

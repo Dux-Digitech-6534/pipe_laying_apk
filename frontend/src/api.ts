@@ -31,6 +31,12 @@ export const API = {
   calcBackfilling: PREFIX + 'calc_backfilling',
   checkDuplicate: PREFIX + 'check_duplicate',
   syncBatch: PREFIX + 'sync_batch',
+  mtMasters: PREFIX + 'mt_masters',
+  itemSearch: PREFIX + 'item_search',
+  // Material Transfer reuses the existing desk-page endpoints directly — same
+  // logic, same native Stock Entry validation. No mobile-specific wrapper.
+  saveMaterialTransfer: 'pipe_laying_inhouse.api.save_material_transfer',
+  submitMaterialTransfer: 'pipe_laying_inhouse.api.submit_material_transfer',
   logout: 'logout',
 } as const;
 
@@ -213,6 +219,29 @@ export const fetchCapabilities = () => call<Capabilities>(API.capabilities);
 export const fetchMasters = () => call<Masters>(API.masters, {}, { timeoutMs: 45000 });
 export const fetchHomeSummary = () => call<HomeSummary>(API.homeSummary);
 
+// -------------------------------------------------------- material transfer
+export interface Warehouse {
+  name: string;
+  warehouse_name?: string | null;
+  company?: string | null;
+}
+export interface MtMasters {
+  warehouses: Warehouse[];
+  companies: { name: string; abbr?: string }[];
+  default_company: string | null;
+  can_create: boolean;
+  can_submit: boolean;
+}
+export interface ItemHit {
+  name: string;
+  item_name?: string | null;
+  stock_uom?: string | null;
+  item_group?: string | null;
+}
+
+export const fetchMtMasters = () => call<MtMasters>(API.mtMasters, {}, { timeoutMs: 30000 });
+export const searchItems = (q: string) => call<ItemHit[]>(API.itemSearch, { q, limit: 25 });
+
 export const fetchCards = (args: {
   search?: string;
   status?: string;
@@ -276,6 +305,47 @@ export const saveBackfilling = (pourCard: string, rows: string[], date: string) 
     API.calcBackfilling,
     { pour_card: pourCard, rows: JSON.stringify(rows), date, save: 1 },
     { post: true },
+  );
+
+// -------------------------------------------------------- material transfer
+export interface MtItem {
+  item_code: string;
+  qty: number;
+  uom?: string | null;
+  basic_rate?: number | null;
+  s_warehouse?: string | null;
+  t_warehouse?: string | null;
+}
+export interface MtPayload {
+  company: string | null;
+  posting_date: string;
+  from_warehouse: string | null;
+  to_warehouse: string | null;
+  items: MtItem[];
+  name?: string | null;
+}
+
+/** Save (insert/update) a Material Transfer draft — a real Stock Entry, its
+ *  native validate() runs on the server. Returns the assigned name. */
+export const saveMaterialTransfer = (payload: MtPayload) =>
+  call<{ name: string; docstatus: 0 | 1 | 2 }>(
+    API.saveMaterialTransfer,
+    {
+      company: payload.company,
+      posting_date: payload.posting_date,
+      from_warehouse: payload.from_warehouse,
+      to_warehouse: payload.to_warehouse,
+      items: JSON.stringify(payload.items),
+      name: payload.name ?? undefined,
+    },
+    { post: true, timeoutMs: 60000 },
+  );
+
+export const submitMaterialTransfer = (name: string) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; skipped?: boolean }>(
+    API.submitMaterialTransfer,
+    { name },
+    { post: true, timeoutMs: 60000 },
   );
 
 // -------------------------------------------------------------- batch replay
