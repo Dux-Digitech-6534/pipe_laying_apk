@@ -225,7 +225,9 @@ export function Settings() {
         onConfirm={async () => {
           setConfirmSignOut(false);
           await logout();
-          location.href = '/login';
+          // Reload the app root, not Frappe's /login: as a Guest the SPA boots
+          // straight into its own branded sign-in gate (Login.tsx).
+          location.href = '/pipe-laying/m';
         }}
         onCancel={() => setConfirmSignOut(false)}
       />
