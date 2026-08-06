@@ -193,6 +193,15 @@ const en: Dict = {
     'Record pour cards, excavation and laying details from the site — online or offline.',
   no_permission: 'You do not have permission for this.',
   optional: 'optional',
+
+  email: 'Email',
+  password: 'Password',
+  email_ph: 'you@company.com',
+  password_ph: 'Your password',
+  show: 'Show',
+  hide: 'Hide',
+  signing_in: 'Signing in…',
+  invalid_login: 'Invalid email or password. Please try again.',
 };
 
 const hi: Dict = {
@@ -371,6 +380,15 @@ const hi: Dict = {
     'साइट से ही पोर कार्ड, खुदाई और लेइंग डिटेल दर्ज करें — ऑनलाइन हो या ऑफलाइन।',
   no_permission: 'आपको इसकी अनुमति नहीं है।',
   optional: 'वैकल्पिक',
+
+  email: 'ईमेल',
+  password: 'पासवर्ड',
+  email_ph: 'you@company.com',
+  password_ph: 'आपका पासवर्ड',
+  show: 'दिखाएं',
+  hide: 'छिपाएं',
+  signing_in: 'साइन इन हो रहा है…',
+  invalid_login: 'गलत ईमेल या पासवर्ड। दोबारा कोशिश करें।',
 };
 
 const DICTS: Record<Lang, Dict> = { en, hi };

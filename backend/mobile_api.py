@@ -418,26 +418,32 @@ def get_masters():
     return {
         "rev": rev,
         "fetched_at": frappe.utils.now(),
-        "projects": frappe.get_all("Site Project", fields=["name"], order_by="name", limit_page_length=0),
-        "zones": frappe.get_all(
+        # get_list (NOT get_all) so the user's User Permissions apply, exactly
+        # like the desk link fields: a user restricted to a Site Project sees
+        # only that site here, and — because a Site Project user-permission with
+        # apply_to_all_doctypes propagates to every doctype that links to it —
+        # only that site's zones / villages / components / contractors too.
+        # An unrestricted user (no Site Project user-permission) still sees all.
+        "projects": frappe.get_list("Site Project", fields=["name"], order_by="name", limit_page_length=0),
+        "zones": frappe.get_list(
             "Zone Details",
             fields=["name", "town_project as project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "villages": frappe.get_all(
+        "villages": frappe.get_list(
             "Pipe Laying Village Details",
             fields=["name", "townproject as project", "zone_name as zone"],
             order_by="name",
             limit_page_length=0,
         ),
-        "components": frappe.get_all(
+        "components": frappe.get_list(
             "Component at Site",
             fields=["name", "project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "contractors": frappe.get_all(
+        "contractors": frappe.get_list(
             "Contractor at Site",
             fields=["name", "project", "contractor"],
             order_by="name",

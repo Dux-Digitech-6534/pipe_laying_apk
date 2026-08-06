@@ -315,6 +315,56 @@ export const syncOutbox = (ops: OutboxOp[]) =>
     { post: true, timeoutMs: 120000 },
   );
 
+/**
+ * Sign in against Frappe from inside the app — no redirect to the unbranded
+ * /login page. A Guest POST to /api/method/login needs no CSRF token (Frappe
+ * exempts Guests), and on success Frappe sets the session cookie; the caller
+ * then reloads so the static shell re-injects the authenticated CSRF token.
+ */
+export async function login(usr: string, pwd: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  let response: Response;
+  try {
+    response = await fetch('/api/method/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ usr, pwd }).toString(),
+    });
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError';
+    throw new ApiError(aborted ? 'Request timed out' : 'No connection', 'network');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (response.ok) return;
+
+  // Bad credentials come back as 401; surface a clean message rather than
+  // Frappe's HTML.
+  if (response.status === 401) {
+    throw new ApiError('Invalid email or password', 'auth', 401);
+  }
+
+  let body: unknown = null;
+  const text = await response.text().catch(() => '');
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* HTML or plain text — classify() falls back to a status message */
+    }
+  }
+  throw classify(response.status, body);
+}
+
 export async function logout(): Promise<void> {
   try {
     await call(API.logout, {}, { post: true, timeoutMs: 10000 });

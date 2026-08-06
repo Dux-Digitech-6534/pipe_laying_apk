@@ -23,7 +23,7 @@ import {
   todayISO,
 } from '../calc';
 import { sync } from '../sync';
-import { STRATA_OPTIONS, useCascade, useStore } from '../store';
+import { useCascade, useStore } from '../store';
 import { goBack } from '../router';
 import { Picker } from '../components/Picker';
 import { DateField, NumField, Readout, TextField, Toggle } from '../components/Fields';
@@ -40,7 +40,6 @@ import {
   IconPlus,
   IconRoad,
   IconRuler,
-  IconSparkle,
 } from '../icons';
 import type { CardDetail, LayingValues } from '../types';
 
@@ -254,13 +253,8 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
                 error={showTrench && !values.pipe_depth ? t('required') : null}
               />
             </div>
-            <div className="grid2" style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8 }}>
               <Readout label={`${t('total_excavation')} (${t('cum')})`} value={totals.pipe_calculated_qty} />
-              <Readout
-                label={`${t('pipe_volume')} (${t('cum')})`}
-                value={totals.pipe_volume}
-                precision={4}
-              />
             </div>
           </div>
 
@@ -378,6 +372,11 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
           </div>
 
           {/* ------------------------------------------------------ laying */}
+          {/* Mirrors the LIVE desk "Create New Pour Card" popup's Laying
+              Details section exactly: Pipe Details + read-only Pipe Volume.
+              Bedding / Strata are NOT part of that popup — they are hidden
+              legacy fields on the child grid used by the Backfilling flow —
+              so they are not collected on this create screen. */}
           <div className="sec">
             <SectionHead icon={<IconLayers />} title={t('sec_pipe')} />
             <Picker
@@ -397,30 +396,13 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
                   : undefined
               }
             />
-            <div className="grid2">
-              <NumField
-                mini
-                label={`${t('bedding')} (${t('mtr')})`}
-                value={values.bedding_depth}
-                onChange={(value) => set('bedding_depth', value)}
-                optional
-                t={t}
-              />
-              <Picker
-                mini
-                label={t('strata')}
-                value={values.strata_name}
-                onChange={(value) => set('strata_name', value)}
-                options={STRATA_OPTIONS}
-                t={t}
-                optional
-                searchable={false}
-                icon={<IconMountain />}
+            <div style={{ marginTop: 8 }}>
+              <Readout
+                label={`${t('pipe_volume')} (${t('cum')})`}
+                value={totals.pipe_volume}
+                precision={4}
               />
             </div>
-            <Note style={{ marginTop: 10 }} icon={<IconSparkle />}>
-              {t('backfill_note')}
-            </Note>
           </div>
 
           {/* ------------------------------------------------- backfilling */}

@@ -53,21 +53,32 @@ export function NewCard() {
       // build a card the server then rejects.
       if (key === 'townproject') {
         next.zone_name = null;
-        next.village_name = null;
         next.component = null;
         next.select_contractor = null;
       }
-      if (key === 'zone_name') next.village_name = null;
       return next;
     });
     setDuplicate(null);
   };
 
+  // Default to the user's project when their User Permission scopes them to a
+  // single Site Project — one less tap for field staff who only ever work one
+  // site. The picker stays fully editable. Only auto-fills on exactly one
+  // option, so a user with several projects is never silently pinned to the
+  // wrong one; they still choose. Reacts to masters arriving/refreshing, since
+  // the scoped list resolves asynchronously.
+  const projects = cascade.projects;
+  useEffect(() => {
+    if (projects.length !== 1) return;
+    setForm((current) =>
+      current.townproject ? current : { ...current, townproject: projects[0].value },
+    );
+  }, [projects]);
+
   const errors = useMemo(() => {
     const found: Partial<Record<keyof CardHeader, string>> = {};
     if (!form.townproject) found.townproject = t('required');
     if (!form.zone_name) found.zone_name = t('required');
-    if (!form.village_name) found.village_name = t('required');
     if (!form.select_contractor) found.select_contractor = t('required');
     if (!form.from_junction) found.from_junction = t('required');
     if (!form.to_junction) found.to_junction = t('required');
@@ -175,7 +186,10 @@ export function NewCard() {
             error={show('townproject')}
           />
 
-          <div className="grid2" style={{ marginBottom: 14 }}>
+          {/* Village removed: village_name is reqd=0 and hidden on the desk
+              Pour Card, so it is not collected here. Zone stays — it is reqd=1
+              on Pour Card. */}
+          <div style={{ marginBottom: 14 }}>
             <Picker
               label={t('zone')}
               value={form.zone_name}
@@ -187,18 +201,6 @@ export function NewCard() {
               emptyHint={projectHint}
               icon={<IconPin />}
               error={show('zone_name')}
-            />
-            <Picker
-              label={t('village')}
-              value={form.village_name}
-              onChange={(value) => set('village_name', value)}
-              options={cascade.villagesFor(project, form.zone_name)}
-              t={t}
-              required
-              disabled={!project}
-              emptyHint={projectHint}
-              icon={<IconPin />}
-              error={show('village_name')}
             />
           </div>
 
