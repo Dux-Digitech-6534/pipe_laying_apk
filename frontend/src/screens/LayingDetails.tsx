@@ -24,7 +24,7 @@ import {
 } from '../calc';
 import { sync } from '../sync';
 import { useCascade, useStore } from '../store';
-import { goBack } from '../router';
+import { goBack, replace } from '../router';
 import { Picker } from '../components/Picker';
 import { DateField, NumField, Readout, TextField, Toggle } from '../components/Fields';
 import { Note, SectionHead, useToast } from '../components/Feedback';
@@ -107,6 +107,14 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
       current.select_contractor ? current : { ...current, select_contractor: card.contractor },
     );
   }, [card?.contractor]);
+
+  // This screen is reachable by deep link (#/laying/<name>), so the card's own
+  // state has to be checked here too — the Add button on Card Detail is not the
+  // only way in. Bounce rather than render a form whose save can only fail.
+  const locked = card ? card.docstatus !== 0 : false;
+  useEffect(() => {
+    if (locked) replace({ name: 'card', id: cardName });
+  }, [locked, cardName]);
 
   const set = <K extends keyof LayingValues>(key: K, value: LayingValues[K]) => {
     setValues((current) => {

@@ -24,6 +24,7 @@ import {
   IconChevronDown,
   IconCloudOff,
   IconLayers,
+  IconLock,
   IconPlus,
   IconSend,
   IconSparkle,
@@ -190,7 +191,10 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
     );
   }
 
-  const canAdd = card.docstatus !== 2 && (card.can_write || caps.write);
+  // Draft only. Locking a card is meant to freeze it, and the desk hides Cancel
+  // after submit so there is no way back — an app that kept accepting laying
+  // batches would quietly move stock the locked Material Issue never covered.
+  const canAdd = card.docstatus === 0 && (card.can_write || caps.write);
   const canSubmit = card.docstatus === 0 && (card.can_submit || caps.submit) && !pendingSubmit;
 
   return (
@@ -247,6 +251,12 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
           {card.material_issue ? (
             <Note kind="ok" icon={<IconSparkle />} style={{ marginTop: 12 }}>
               {t('submit_done', { name: card.material_issue })}
+            </Note>
+          ) : null}
+
+          {card.docstatus === 1 ? (
+            <Note kind="info" icon={<IconLock />} style={{ marginTop: 12 }}>
+              {t('card_locked')}
             </Note>
           ) : null}
 

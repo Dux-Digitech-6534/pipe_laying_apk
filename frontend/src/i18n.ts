@@ -20,7 +20,10 @@ const en: Dict = {
 
   // status
   draft: 'Draft',
-  submitted: 'Submitted',
+  // The desk relabels submitted Pour Cards as "Lock Entry"; the app says the
+  // same thing, phrased as the state it is rather than the button that got it
+  // there.
+  submitted: 'Locked',
   cancelled: 'Cancelled',
   pending_sync: 'Pending sync',
   offline: 'Offline',
@@ -120,13 +123,14 @@ const en: Dict = {
   no_entries: 'No laying details yet',
   no_entries_hint: 'Add the first entry for this card.',
   pipe_id: 'Pipe ID',
-  submit_card: 'Submit',
-  submit_confirm_title: 'Submit this Pour Card?',
+  submit_card: 'Lock Entry',
+  submit_confirm_title: 'Lock this Pour Card?',
   submit_confirm_body:
-    'Submitting creates the Material Issue stock entry and locks the header. This cannot be undone from the app.',
-  submit_queued: 'Submit queued — it will run when you have signal.',
-  submit_done: 'Submitted · Material Issue {name}',
-  submit_needs_online: 'Submitting needs a connection because it moves stock. Queued for now.',
+    'Locking issues the pipe and accessory stock from the contractor warehouse. No further entries can be added afterwards, and this cannot be undone from the app.',
+  submit_queued: 'Lock queued — it will run when you have signal.',
+  submit_done: 'Locked · Material Issue {name}',
+  submit_needs_online: 'Locking needs a connection because it moves stock. Queued for now.',
+  card_locked: 'This entry is locked. No further changes can be made.',
   cancel: 'Cancel',
   confirm: 'Confirm',
   calculate: 'Calculate',
@@ -148,7 +152,7 @@ const en: Dict = {
   discard_confirm: 'Discard this entry permanently?',
   op_save_card: 'New Pour Card',
   op_add_laying_batch: 'Laying details',
-  op_submit_card: 'Submit card',
+  op_submit_card: 'Lock card',
 
   // settings
   settings: 'Settings',
@@ -249,7 +253,7 @@ const hi: Dict = {
   nav_settings: 'सेटिंग',
 
   draft: 'ड्राफ्ट',
-  submitted: 'सबमिट',
+  submitted: 'लॉक',
   cancelled: 'रद्द',
   pending_sync: 'सिंक बाकी',
   offline: 'ऑफलाइन',
@@ -344,13 +348,14 @@ const hi: Dict = {
   no_entries: 'अभी कोई लेइंग डिटेल नहीं',
   no_entries_hint: 'इस कार्ड की पहली एंट्री जोड़ें।',
   pipe_id: 'पाइप आईडी',
-  submit_card: 'सबमिट',
-  submit_confirm_title: 'यह पोर कार्ड सबमिट करें?',
+  submit_card: 'लॉक एंट्री',
+  submit_confirm_title: 'यह पोर कार्ड लॉक करें?',
   submit_confirm_body:
-    'सबमिट करने पर मटेरियल इशू स्टॉक एंट्री बनेगी और हेडर लॉक हो जाएगा। ऐप से वापस नहीं हो सकता।',
-  submit_queued: 'सबमिट कतार में — नेटवर्क आने पर चलेगा।',
-  submit_done: 'सबमिट हो गया · मटेरियल इशू {name}',
-  submit_needs_online: 'सबमिट के लिए नेटवर्क चाहिए क्योंकि इसमें स्टॉक निकलता है। फ़िलहाल कतार में।',
+    'लॉक करने पर ठेकेदार वेयरहाउस से पाइप और एक्सेसरीज़ का स्टॉक निकल जाएगा। उसके बाद कोई एंट्री नहीं जोड़ी जा सकेगी, और ऐप से वापस नहीं हो सकता।',
+  submit_queued: 'लॉक कतार में — नेटवर्क आने पर चलेगा।',
+  submit_done: 'लॉक हो गया · मटेरियल इशू {name}',
+  submit_needs_online: 'लॉक करने के लिए नेटवर्क चाहिए क्योंकि इसमें स्टॉक निकलता है। फ़िलहाल कतार में।',
+  card_locked: 'यह एंट्री लॉक है। अब इसमें कोई बदलाव नहीं हो सकता।',
   cancel: 'रद्द',
   confirm: 'पुष्टि करें',
   calculate: 'गणना करें',
@@ -371,7 +376,7 @@ const hi: Dict = {
   discard_confirm: 'यह एंट्री हमेशा के लिए हटाएँ?',
   op_save_card: 'नया पोर कार्ड',
   op_add_laying_batch: 'लेइंग डिटेल',
-  op_submit_card: 'कार्ड सबमिट',
+  op_submit_card: 'कार्ड लॉक',
 
   settings: 'सेटिंग',
   language: 'भाषा',

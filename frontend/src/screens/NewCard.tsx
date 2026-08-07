@@ -24,6 +24,20 @@ import {
 } from '../icons';
 import type { CardHeader } from '../types';
 
+/** Zone is a Distribution-only field.
+ *
+ *  Straight from the doctype, so the app and the desk can't disagree:
+ *  Pour Card.zone_name carries
+ *    depends_on = "eval:doc.component && doc.component.startsWith('Distribution - ')"
+ *  and reqd = 0. Every other component (CWFM, CWPM, …) has no zone.
+ *
+ *  Matched with startsWith and the trailing " - " exactly as the doctype does,
+ *  so a future component merely containing the word "Distribution" does not
+ *  accidentally qualify. */
+export function isDistribution(component: string | null): boolean {
+  return !!component && component.startsWith('Distribution - ');
+}
+
 const EMPTY: CardHeader = {
   townproject: null,
   zone_name: null,
@@ -56,6 +70,12 @@ export function NewCard() {
         next.component = null;
         next.select_contractor = null;
       }
+      // Zone only belongs to a Distribution component (see zoneApplies). Moving
+      // off Distribution drops any zone already picked, so a hidden field can
+      // never smuggle a stale value onto the saved card.
+      if (key === 'component' && !isDistribution(next.component)) {
+        next.zone_name = null;
+      }
       return next;
     });
     setDuplicate(null);
@@ -71,10 +91,14 @@ export function NewCard() {
     );
   }, [projects]);
 
+  const zoneApplies = isDistribution(form.component);
+
   const errors = useMemo(() => {
     const found: Partial<Record<keyof CardHeader, string>> = {};
     if (!form.townproject) found.townproject = t('required');
-    if (!form.zone_name) found.zone_name = t('required');
+    // Required only where the field is shown. The doctype agrees: zone_name has
+    // reqd = 0 and the same depends_on rule.
+    if (zoneApplies && !form.zone_name) found.zone_name = t('required');
     if (!form.select_contractor) found.select_contractor = t('required');
     if (!form.from_junction) found.from_junction = t('required');
     if (!form.to_junction) found.to_junction = t('required');
@@ -182,11 +206,26 @@ export function NewCard() {
             error={show('townproject')}
           />
 
+          {/* Component sits above Zone because Zone's visibility depends on it.
+              The other way round, a user would pick a zone and watch it vanish
+              when they chose a non-Distribution component. */}
+          <Picker
+            label={t('component')}
+            value={form.component}
+            onChange={(value) => set('component', value)}
+            options={cascade.componentsFor(project)}
+            t={t}
+            optional
+            disabled={!project}
+            emptyHint={projectHint}
+            icon={<IconDrop />}
+          />
+
           {/* Village is not captured on the phone: most rows on this site leave
               Pipe Laying Village Details.zone_name empty, so the picker showed
               an unfiltered list that field staff could not choose from
               reliably. It stays in the payload as null. */}
-          <div style={{ marginBottom: 14 }}>
+          {zoneApplies ? (
             <Picker
               label={t('zone')}
               value={form.zone_name}
@@ -199,19 +238,7 @@ export function NewCard() {
               icon={<IconPin />}
               error={show('zone_name')}
             />
-          </div>
-
-          <Picker
-            label={t('component')}
-            value={form.component}
-            onChange={(value) => set('component', value)}
-            options={cascade.componentsFor(project)}
-            t={t}
-            optional
-            disabled={!project}
-            emptyHint={projectHint}
-            icon={<IconDrop />}
-          />
+          ) : null}
 
           <Picker
             label={t('contractor')}

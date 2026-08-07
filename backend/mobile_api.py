@@ -762,6 +762,20 @@ def add_laying_batch(pour_card, values, batch_uid=None):
     if cint(doc.docstatus) == 2:
         frappe.throw(_("Cannot add details to a cancelled Pour Card."))
 
+    # Locked ("Lock Entry" on the desk) means submitted. The rows would still go
+    # in — api.add_laying_details_to_pour_card sets
+    # ignore_validate_update_after_submit — but the Material Issue was already
+    # created and submitted from on_submit, so anything added now moves no stock
+    # and leaves the card claiming more pipe than was ever issued. Refuse.
+    #
+    # Checked before the replay ledger so a batch queued offline BEFORE the lock
+    # is rejected too: it is the same stock problem whenever it arrives.
+    if cint(doc.docstatus) == 1:
+        frappe.throw(
+            _("Pour Card {0} is locked. No further details can be added.").format(doc.name),
+            frappe.PermissionError,
+        )
+
     if _batch_already_applied(doc.name, batch_uid):
         return {
             "name": doc.name,
