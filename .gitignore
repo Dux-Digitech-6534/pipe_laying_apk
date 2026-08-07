@@ -22,3 +22,7 @@ pipe_laying_inhouse/public/plm/
 
 # Read-only copies of live server code, pulled for reference
 backend-ref/
+
+# Byte-compiled Python — deploy.sh compiles on the server, never from here.
+__pycache__/
+*.pyc
