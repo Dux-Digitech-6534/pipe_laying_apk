@@ -941,6 +941,35 @@ def submit_card(name):
     }
 
 
+def _murum_for_pipe(doc, pipe_id):
+    """Murum recorded against one pipe row, summed from the Murum Details rows.
+
+    The desk script computes this as Length x Width x *Bedding Depth* off the
+    pipe row's `custom_bedding`. That number is always zero in practice: nothing
+    writes custom_bedding — not one of the pipe rows on this site has it set —
+    and the desk popup has no field for it, so Murum silently dropped out of
+    Backfilling for every card while the operator could plainly see the Murum
+    L/W/D they had entered.
+
+    The Murum Details rows carry the same `pipe_id` the batch generated, so the
+    quantity the operator actually recorded attributes back to its pipe row
+    exactly. A row with no pipe_id is skipped rather than matched to everything.
+    """
+    if not pipe_id:
+        return 0.0
+
+    total = 0.0
+    for m in doc.get(TABLES["murum"]) or []:
+        if m.get("pipe_id") != pipe_id:
+            continue
+        total += (
+            flt(m.get("hard_rock_lengthmtr"))
+            * flt(m.get("hard_rock_widthmtr"))
+            * flt(m.get("hard_rock_depthmtr"))
+        )
+    return total
+
+
 @frappe.whitelist()
 def calc_backfilling(pour_card, rows=None, date=None, save=0):
     """Backfilling calculator for the selected pipe rows.
@@ -972,18 +1001,13 @@ def calc_backfilling(pour_card, rows=None, date=None, save=0):
         length = flt(row.get("length_of_pipemtr"))
         width = flt(row.get("width_of_pipemtr"))
         depth = flt(row.get("depth_of_pipemtr"))
-        # Bedding lives on the custom field `custom_bedding` (label "Bedding").
-        # The desk backfilling script finds it by label match; we address it
-        # directly. NOTE the repo's api.py and the "Show Bedding Field" client
-        # script both reference `bedding_depthmtr`, which does not exist on this
-        # site — those writes are silently dropped.
         bedding = flt(row.get("custom_bedding"))
 
         diameter_mm = extract_diameter_mm(row.get("pipe_details"))
         diameter_m = diameter_mm / 1000.0
 
         total_excavation = length * width * depth
-        murum_qty = length * width * bedding
+        murum_qty = _murum_for_pipe(doc, row.get("pipe_id"))
         pipe_volume = (3.14 * diameter_m * diameter_m / 4.0) * length
 
         out.append({

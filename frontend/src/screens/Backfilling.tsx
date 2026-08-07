@@ -38,6 +38,7 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
   const [saving, setSaving] = useState(false);
 
   const rows = card?.pipe ?? [];
+  const murumRows = card?.murum ?? [];
 
   // Default to every row: the common case is "calculate the whole card", and
   // pre-selecting saves a trip into the picker.
@@ -73,15 +74,28 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
         const length = num(row.length_of_pipemtr);
         const width = num(row.width_of_pipemtr);
         const depth = num(row.depth_of_pipemtr);
-        // Bedding is `custom_bedding` on Pipe Laying Detail Child.
         const bedding = num(row.custom_bedding);
+
+        // Murum comes from the Murum Details rows the operator filled in, keyed
+        // by the pipe id the batch shares. The desk derives it from bedding
+        // depth instead, which nothing writes — so it always read 0 here.
+        const murumQty = murumRows
+          .filter((m) => row.pipe_id && m.pipe_id === row.pipe_id)
+          .reduce(
+            (sum, m) =>
+              sum +
+              num(m.hard_rock_lengthmtr) *
+                num(m.hard_rock_widthmtr) *
+                num(m.hard_rock_depthmtr),
+            0,
+          );
 
         const result = calcBackfillRow({
           pipe_details: row.pipe_details as string,
           length,
           width,
           depth,
-          bedding_depth: bedding,
+          murum_qty: murumQty,
         });
 
         return {
@@ -95,7 +109,7 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
           ...result,
         };
       });
-  }, [rows, selected]);
+  }, [rows, murumRows, selected]);
 
   const totals = useMemo(
     () =>

@@ -108,19 +108,26 @@ export function findLengthProblems(v: Partial<LayingValues>): LengthProblem[] {
   return problems;
 }
 
-/** Backfilling for one pipe row. Mirrors pcbf_calculate_backfilling_rows. */
+/** Backfilling for one pipe row.
+ *
+ *  Mirrors pcbf_calculate_backfilling_rows, except for Murum. The desk script
+ *  derives that from the pipe row's bedding depth, which nothing on this site
+ *  ever writes — so Murum came out 0 on every card even when the operator had
+ *  entered Murum L/W/D. The caller passes the quantity actually recorded in the
+ *  Murum Details rows instead. Same substitution server-side in
+ *  mobile_api._murum_for_pipe, so an online recalculation agrees with this. */
 export function calcBackfillRow(row: {
   pipe_details?: string | null;
   length: number;
   width: number;
   depth: number;
-  bedding_depth: number;
+  murum_qty: number;
 }) {
   const diameterMm = extractDiameterMm(row.pipe_details);
   const diameterM = diameterMm / 1000;
 
   const totalExcavation = num(row.length) * num(row.width) * num(row.depth);
-  const murumQty = num(row.length) * num(row.width) * num(row.bedding_depth);
+  const murumQty = num(row.murum_qty);
   const pipeVolume = ((3.14 * diameterM * diameterM) / 4) * num(row.length);
 
   return {
