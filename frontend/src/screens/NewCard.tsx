@@ -53,21 +53,28 @@ export function NewCard() {
       // build a card the server then rejects.
       if (key === 'townproject') {
         next.zone_name = null;
-        next.village_name = null;
         next.component = null;
         next.select_contractor = null;
       }
-      if (key === 'zone_name') next.village_name = null;
       return next;
     });
     setDuplicate(null);
   };
 
+  // With a single project there is nothing to decide, and pre-filling it lets
+  // the rest of the cascade populate immediately.
+  const projects = cascade.projects;
+  useEffect(() => {
+    if (projects.length !== 1) return;
+    setForm((current) =>
+      current.townproject ? current : { ...current, townproject: projects[0].value },
+    );
+  }, [projects]);
+
   const errors = useMemo(() => {
     const found: Partial<Record<keyof CardHeader, string>> = {};
     if (!form.townproject) found.townproject = t('required');
     if (!form.zone_name) found.zone_name = t('required');
-    if (!form.village_name) found.village_name = t('required');
     if (!form.select_contractor) found.select_contractor = t('required');
     if (!form.from_junction) found.from_junction = t('required');
     if (!form.to_junction) found.to_junction = t('required');
@@ -175,7 +182,11 @@ export function NewCard() {
             error={show('townproject')}
           />
 
-          <div className="grid2" style={{ marginBottom: 14 }}>
+          {/* Village is not captured on the phone: most rows on this site leave
+              Pipe Laying Village Details.zone_name empty, so the picker showed
+              an unfiltered list that field staff could not choose from
+              reliably. It stays in the payload as null. */}
+          <div style={{ marginBottom: 14 }}>
             <Picker
               label={t('zone')}
               value={form.zone_name}
@@ -187,18 +198,6 @@ export function NewCard() {
               emptyHint={projectHint}
               icon={<IconPin />}
               error={show('zone_name')}
-            />
-            <Picker
-              label={t('village')}
-              value={form.village_name}
-              onChange={(value) => set('village_name', value)}
-              options={cascade.villagesFor(project, form.zone_name)}
-              t={t}
-              required
-              disabled={!project}
-              emptyHint={projectHint}
-              icon={<IconPin />}
-              error={show('village_name')}
             />
           </div>
 

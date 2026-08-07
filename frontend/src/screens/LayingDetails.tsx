@@ -23,7 +23,7 @@ import {
   todayISO,
 } from '../calc';
 import { sync } from '../sync';
-import { STRATA_OPTIONS, useCascade, useStore } from '../store';
+import { useCascade, useStore } from '../store';
 import { goBack } from '../router';
 import { Picker } from '../components/Picker';
 import { DateField, NumField, Readout, TextField, Toggle } from '../components/Fields';
@@ -40,7 +40,6 @@ import {
   IconPlus,
   IconRoad,
   IconRuler,
-  IconSparkle,
 } from '../icons';
 import type { CardDetail, LayingValues } from '../types';
 
@@ -397,30 +396,12 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
                   : undefined
               }
             />
-            <div className="grid2">
-              <NumField
-                mini
-                label={`${t('bedding')} (${t('mtr')})`}
-                value={values.bedding_depth}
-                onChange={(value) => set('bedding_depth', value)}
-                optional
-                t={t}
-              />
-              <Picker
-                mini
-                label={t('strata')}
-                value={values.strata_name}
-                onChange={(value) => set('strata_name', value)}
-                options={STRATA_OPTIONS}
-                t={t}
-                optional
-                searchable={false}
-                icon={<IconMountain />}
-              />
-            </div>
-            <Note style={{ marginTop: 10 }} icon={<IconSparkle />}>
-              {t('backfill_note')}
-            </Note>
+            {/* Bedding and Strata are deliberately not captured here: bedding is
+                read back from the Pour Card's own custom_bedding for the
+                backfilling maths, and strata is desk-only. Both stay in the
+                payload as nulls so the batch shape never changes — and with no
+                bedding input, the note explaining it belongs on Backfilling
+                only. */}
           </div>
 
           {/* ------------------------------------------------- backfilling */}

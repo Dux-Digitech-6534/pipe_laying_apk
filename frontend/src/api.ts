@@ -11,8 +11,11 @@ import type {
   CardSummary,
   Capabilities,
   HomeSummary,
+  ItemHit,
   LayingValues,
   Masters,
+  MtMasters,
+  MtPayload,
   OutboxOp,
 } from './types';
 
@@ -31,6 +34,12 @@ export const API = {
   calcBackfilling: PREFIX + 'calc_backfilling',
   checkDuplicate: PREFIX + 'check_duplicate',
   syncBatch: PREFIX + 'sync_batch',
+  mtMasters: PREFIX + 'mt_masters',
+  itemSearch: PREFIX + 'item_search',
+  // Material Transfer builds a real Stock Entry, so it reuses the desk-side
+  // helpers in api.py rather than duplicating the doc-building logic.
+  saveMaterialTransfer: 'pipe_laying_inhouse.api.save_material_transfer',
+  submitMaterialTransfer: 'pipe_laying_inhouse.api.submit_material_transfer',
   logout: 'logout',
 } as const;
 
@@ -213,6 +222,12 @@ export const fetchCapabilities = () => call<Capabilities>(API.capabilities);
 export const fetchMasters = () => call<Masters>(API.masters, {}, { timeoutMs: 45000 });
 export const fetchHomeSummary = () => call<HomeSummary>(API.homeSummary);
 
+export const fetchMtMasters = () => call<MtMasters>(API.mtMasters, {}, { timeoutMs: 30000 });
+
+/** Item lookup for the transfer picker. Searched server-side — the item list is
+ *  far too large to cache on the phone. */
+export const searchItems = (q: string) => call<ItemHit[]>(API.itemSearch, { q, limit: 25 });
+
 export const fetchCards = (args: {
   search?: string;
   status?: string;
@@ -271,6 +286,32 @@ export const submitCard = (name: string) =>
     { post: true, timeoutMs: 60000 },
   );
 
+export interface MtResult {
+  name: string;
+  docstatus: 0 | 1 | 2;
+  skipped?: boolean;
+}
+
+/** Two-step like the desk form: this only inserts/updates a draft. Submitting
+ *  is a separate call, so ERPNext's stock validation runs where the user can
+ *  still see and fix the entry. */
+export const saveMaterialTransfer = (payload: MtPayload) =>
+  call<MtResult>(
+    API.saveMaterialTransfer,
+    {
+      company: payload.company,
+      posting_date: payload.posting_date,
+      from_warehouse: payload.from_warehouse,
+      to_warehouse: payload.to_warehouse,
+      items: JSON.stringify(payload.items),
+      name: payload.name ?? undefined,
+    },
+    { post: true, timeoutMs: 60000 },
+  );
+
+export const submitMaterialTransfer = (name: string) =>
+  call<MtResult>(API.submitMaterialTransfer, { name }, { post: true, timeoutMs: 60000 });
+
 export const saveBackfilling = (pourCard: string, rows: string[], date: string) =>
   call<BackfillResult>(
     API.calcBackfilling,
@@ -314,6 +355,58 @@ export const syncOutbox = (ops: OutboxOp[]) =>
     },
     { post: true, timeoutMs: 120000 },
   );
+
+/**
+ * Sign in against Frappe's own /api/method/login.
+ *
+ * Not routed through call(): that helper posts JSON with a CSRF token, and the
+ * login endpoint wants form encoding and has no token to send yet. On success
+ * Frappe sets the session cookie, which is all the rest of the app needs — the
+ * password is never stored, only forwarded same-origin.
+ */
+export async function signIn(usr: string, pwd: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  let response: Response;
+  try {
+    response = await fetch('/api/method/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ usr, pwd }).toString(),
+    });
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError';
+    throw new ApiError(aborted ? 'Request timed out' : 'No connection', 'network');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (response.ok) return;
+
+  // Frappe answers a bad credential pair with 401 and an HTML body, so classify
+  // it here rather than letting readableError guess from markup.
+  if (response.status === 401) {
+    throw new ApiError('Invalid email or password', 'auth', 401);
+  }
+
+  let body: unknown = null;
+  const text = await response.text().catch(() => '');
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* not JSON — classify() falls back to a generic message */
+    }
+  }
+  throw classify(response.status, body);
+}
 
 export async function logout(): Promise<void> {
   try {

@@ -225,7 +225,10 @@ export function Settings() {
         onConfirm={async () => {
           setConfirmSignOut(false);
           await logout();
-          location.href = '/login';
+          // Back to the app, which renders its own sign-in form. Sending the
+          // user to Frappe's /login would drop them into desk chrome inside the
+          // WebView with no way back to the app.
+          location.href = '/pipe-laying/m';
         }}
         onCancel={() => setConfirmSignOut(false)}
       />

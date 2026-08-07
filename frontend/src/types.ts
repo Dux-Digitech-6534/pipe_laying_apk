@@ -246,3 +246,49 @@ export interface SyncState {
   lastSyncAt: number | null;
   lastError: string | null;
 }
+
+// -------------------------------------------------------- material transfer
+
+/** Warehouses/companies for the transfer screen. Permission-scoped server-side,
+ *  so the lists already reflect the user's User Permissions. */
+export interface MtMasters {
+  warehouses: { name: string; warehouse_name: string; company: string | null }[];
+  companies: { name: string; abbr: string }[];
+  default_company: string | null;
+  can_create: boolean;
+  can_submit: boolean;
+}
+
+/** One hit from the server-side Item search. There are 3000+ items on this
+ *  site, far too many to ship to the phone, so the picker queries as you type. */
+export interface ItemHit {
+  name: string;
+  item_name: string | null;
+  stock_uom: string | null;
+  item_group: string | null;
+}
+
+/** A row in the transfer's item table. `_id` is client-only — it keeps React
+ *  keys stable while item_code is still blank. */
+export interface MtLine {
+  _id: number;
+  item_code: string;
+  item_name: string;
+  qty: number;
+  uom: string | null;
+  basic_rate: number;
+}
+
+export interface MtPayload {
+  company: string | null;
+  posting_date: string;
+  from_warehouse: string | null;
+  to_warehouse: string | null;
+  items: {
+    item_code: string;
+    qty: number;
+    uom: string | null;
+    basic_rate: number | null;
+  }[];
+  name?: string;
+}

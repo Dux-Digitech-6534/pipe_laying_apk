@@ -418,26 +418,32 @@ def get_masters():
     return {
         "rev": rev,
         "fetched_at": frappe.utils.now(),
-        "projects": frappe.get_all("Site Project", fields=["name"], order_by="name", limit_page_length=0),
-        "zones": frappe.get_all(
+        # get_list (NOT get_all) so the user's User Permissions apply, exactly
+        # like the desk link fields: a user restricted to a Site Project sees
+        # only that site here, and — because a Site Project user-permission with
+        # apply_to_all_doctypes propagates to every doctype that links to it —
+        # only that site's zones / villages / components / contractors too.
+        # An unrestricted user (no Site Project user-permission) still sees all.
+        "projects": frappe.get_list("Site Project", fields=["name"], order_by="name", limit_page_length=0),
+        "zones": frappe.get_list(
             "Zone Details",
             fields=["name", "town_project as project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "villages": frappe.get_all(
+        "villages": frappe.get_list(
             "Pipe Laying Village Details",
             fields=["name", "townproject as project", "zone_name as zone"],
             order_by="name",
             limit_page_length=0,
         ),
-        "components": frappe.get_all(
+        "components": frappe.get_list(
             "Component at Site",
             fields=["name", "project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "contractors": frappe.get_all(
+        "contractors": frappe.get_list(
             "Contractor at Site",
             fields=["name", "project", "contractor"],
             order_by="name",
@@ -459,6 +465,58 @@ def get_masters():
         ),
         "companies": frappe.get_all("Company", fields=["name", "abbr"], limit_page_length=0),
     }
+
+
+@frappe.whitelist()
+def mt_masters():
+    """Warehouses + companies for the Material Transfer screen.
+
+    get_list (not get_all) so the user's User Permissions apply — a user scoped
+    to a Company sees only that company's warehouses, exactly like the desk
+    Warehouse link field. `can_create`/`can_submit` mirror the real Stock Entry
+    permission gates (save/submit enforce them server-side regardless).
+    """
+    _require("read")
+
+    return {
+        "warehouses": frappe.get_list(
+            "Warehouse",
+            filters={"is_group": 0, "disabled": 0},
+            fields=["name", "warehouse_name", "company"],
+            order_by="name",
+            limit_page_length=0,
+        ),
+        "companies": frappe.get_list(
+            "Company", fields=["name", "abbr"], order_by="name", limit_page_length=0
+        ),
+        "default_company": frappe.defaults.get_user_default("company") or _default_company(),
+        "can_create": bool(frappe.has_permission("Stock Entry", "create")),
+        "can_submit": bool(frappe.has_permission("Stock Entry", "submit")),
+    }
+
+
+@frappe.whitelist()
+def item_search(q=None, limit=25):
+    """Server-side Item search for the transfer item picker — there are 3000+
+    items, far too many to ship to the phone. Matches item code or name,
+    permission-scoped via get_list."""
+    _require("read")
+
+    text = (q or "").strip()
+    filters = {"disabled": 0}
+    or_filters = None
+    if text:
+        like = "%{0}%".format(text)
+        or_filters = {"name": ["like", like], "item_name": ["like", like]}
+
+    return frappe.get_list(
+        "Item",
+        filters=filters,
+        or_filters=or_filters,
+        fields=["name", "item_name", "stock_uom", "item_group"],
+        order_by="modified desc",
+        limit_page_length=cint(limit) or 25,
+    )
 
 
 @frappe.whitelist()

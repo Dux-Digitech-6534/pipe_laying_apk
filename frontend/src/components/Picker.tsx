@@ -10,10 +10,12 @@
 // pattern users already know from every contacts / bank / ride app.
 
 import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react';
-import { IconAlert, IconCheck, IconChevronRight, IconSearch, IconX } from '../icons';
+import { IconAlert, IconBox, IconCheck, IconChevronRight, IconSearch, IconX } from '../icons';
 import { Sheet } from './Sheet';
+import { searchItems } from '../api';
 import { tapLight } from '../haptics';
 import type { T } from '../i18n';
+import type { ItemHit } from '../types';
 
 export interface Option {
   value: string;
@@ -352,5 +354,158 @@ export function MultiPicker({
         )}
       </Sheet>
     </>
+  );
+}
+
+interface ItemPickerProps {
+  label: string;
+  value: string | null;
+  onChange: (item: ItemHit | null) => void;
+  t: T;
+  error?: string | null;
+}
+
+/**
+ * Item lookup for Material Transfer.
+ *
+ * Unlike Picker, the options are not held in memory: this site carries 3000+
+ * items, far too many to ship to the phone with the other masters. Each
+ * keystroke queries the server instead, debounced so a typist fires one request
+ * rather than one per letter, and race-guarded so a slow early response can
+ * never overwrite the results of a later query.
+ */
+export function ItemPicker({ label, value, onChange, t, error }: ItemPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ItemHit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const seq = useRef(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 340);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const mine = ++seq.current;
+    setLoading(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const hits = await searchItems(query.trim());
+        if (seq.current === mine) setResults(hits);
+      } catch {
+        // An empty list reads as "nothing matched", which is the honest state
+        // when we could not reach the server.
+        if (seq.current === mine) setResults([]);
+      } finally {
+        if (seq.current === mine) setLoading(false);
+      }
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [query, open]);
+
+  const openSheet = () => {
+    tapLight();
+    setQuery('');
+    setResults([]);
+    setOpen(true);
+  };
+
+  const choose = (item: ItemHit) => {
+    tapLight();
+    onChange(item);
+    setOpen(false);
+  };
+
+  return (
+    <div className="field">
+      <label>
+        <span>{label}</span>
+      </label>
+
+      <button
+        type="button"
+        className={`control tap${error ? ' invalid' : ''}`}
+        onClick={openSheet}
+      >
+        <IconBox />
+        <span className={`val${value ? '' : ' empty'}`}>{value ?? t('select_item')}</span>
+        <IconChevronRight className="chev-r" size="sm" />
+      </button>
+
+      {error ? (
+        <div className="field-error">
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={label}
+        toolbar={
+          <div className="control">
+            <IconSearch />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('search_item')}
+              inputMode="search"
+              autoComplete="off"
+            />
+            {query ? (
+              <button
+                className="iconbtn plain"
+                style={{ width: 26, height: 26 }}
+                onClick={() => {
+                  setQuery('');
+                  searchRef.current?.focus();
+                }}
+                aria-label={t('clear')}
+              >
+                <IconX size="sm" />
+              </button>
+            ) : null}
+          </div>
+        }
+      >
+        {loading ? (
+          <div className="empty-state">
+            <IconSearch />
+            <h3>{t('loading')}</h3>
+          </div>
+        ) : results.length ? (
+          results.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              className={`opt${item.name === value ? ' selected' : ''}`}
+              onClick={() => choose(item)}
+            >
+              <div className="opt-main">
+                <div className="opt-name">{item.name}</div>
+                {item.item_name && item.item_name !== item.name ? (
+                  <div className="opt-meta">{item.item_name}</div>
+                ) : null}
+              </div>
+              {item.item_group ? <span className="opt-tag">{item.item_group}</span> : null}
+            </button>
+          ))
+        ) : (
+          <div className="empty-state">
+            <IconSearch />
+            <h3>{t('no_results')}</h3>
+            {query ? <p>{query}</p> : null}
+          </div>
+        )}
+      </Sheet>
+    </div>
   );
 }
