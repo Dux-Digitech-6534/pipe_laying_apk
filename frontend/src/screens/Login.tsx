@@ -38,11 +38,15 @@ export function Login({ reason }: { reason?: 'expired' | 'guest' }) {
       window.location.assign('/pipe-laying/m');
     } catch (caught) {
       setError(
-        caught instanceof ApiError && caught.kind === 'auth'
-          ? t('invalid_login')
-          : caught instanceof ApiError && caught.kind === 'network'
-            ? t('working_offline')
-            : t('error_generic'),
+        caught instanceof ApiError && caught.kind === 'locked'
+          ? // Frappe's own wording carries the wait in seconds, which is the one
+            // thing the user needs; keep it rather than paraphrasing.
+            `${t('account_locked')} ${caught.message}`
+          : caught instanceof ApiError && caught.kind === 'auth'
+            ? t('invalid_login')
+            : caught instanceof ApiError && caught.kind === 'network'
+              ? t('working_offline')
+              : t('error_generic'),
       );
       setBusy(false);
     }

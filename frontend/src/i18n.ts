@@ -208,6 +208,7 @@ const en: Dict = {
   hide: 'Hide',
   signing_in: 'Signing in…',
   invalid_login: 'Invalid email or password. Please try again.',
+  account_locked: 'Too many attempts — stop and wait, retrying keeps it locked.',
 
   // material transfer
   material_transfer: 'Material Transfer',
@@ -431,6 +432,7 @@ const hi: Dict = {
   hide: 'छिपाएं',
   signing_in: 'साइन इन हो रहा है…',
   invalid_login: 'गलत ईमेल या पासवर्ड। दोबारा कोशिश करें।',
+  account_locked: 'बहुत बार कोशिश हुई — अब रुक जाएं, बार-बार कोशिश करने से लॉक बना रहेगा।',
 
   // material transfer
   material_transfer: 'मटेरियल ट्रांसफर',

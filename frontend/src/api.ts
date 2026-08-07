@@ -71,7 +71,7 @@ export const boot: BootInfo =
 export class ApiError extends Error {
   constructor(
     message: string,
-    readonly kind: 'network' | 'auth' | 'permission' | 'validation' | 'server',
+    readonly kind: 'network' | 'auth' | 'permission' | 'validation' | 'server' | 'locked',
     readonly status?: number,
   ) {
     super(message);
@@ -409,12 +409,6 @@ export async function signIn(usr: string, pwd: string): Promise<void> {
 
   if (response.ok) return;
 
-  // Frappe answers a bad credential pair with 401 and an HTML body, so classify
-  // it here rather than letting readableError guess from markup.
-  if (response.status === 401) {
-    throw new ApiError('Invalid email or password', 'auth', 401);
-  }
-
   let body: unknown = null;
   const text = await response.text().catch(() => '');
   if (text) {
@@ -424,6 +418,27 @@ export async function signIn(usr: string, pwd: string): Promise<void> {
       /* not JSON — classify() falls back to a generic message */
     }
   }
+
+  // After allow_consecutive_login_attempts failures Frappe locks the account
+  // (and the IP) for allow_login_after_fail seconds and throws SecurityException
+  // — a bare Exception with no http_status_code, so it arrives as a 500. Telling
+  // that user "invalid password" is what produces the retry storm that keeps the
+  // lock alive; they need to know to stop and wait. exc_type is matched rather
+  // than the message text, which is translated.
+  if ((body as { exc_type?: string } | null)?.exc_type === 'SecurityException') {
+    throw new ApiError(
+      readableError(body, 'Too many attempts. Please wait a minute.'),
+      'locked',
+      response.status,
+    );
+  }
+
+  // Frappe answers a bad credential pair with 401, so classify it directly
+  // rather than letting readableError guess from the HTML body it returns.
+  if (response.status === 401) {
+    throw new ApiError('Invalid email or password', 'auth', 401);
+  }
+
   throw classify(response.status, body);
 }
 
