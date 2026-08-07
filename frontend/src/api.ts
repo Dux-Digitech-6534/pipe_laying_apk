@@ -84,6 +84,25 @@ export class ApiError extends Error {
   }
 }
 
+// A session can die at any moment, not just during boot, and the screen that
+// notices is usually not the one that can do anything about it. Frappe answers
+// a signed-out caller with "You are not permitted to access this resource.
+// Login to access Function <x> is not whitelisted." — true, useless to a user
+// on a trench, and it was being printed verbatim. Announce the loss centrally
+// instead and let the shell offer a sign-in.
+const AUTH_LOST_EVENT = 'plm:auth-lost';
+
+export function onAuthLost(handler: () => void): () => void {
+  window.addEventListener(AUTH_LOST_EVENT, handler);
+  return () => window.removeEventListener(AUTH_LOST_EVENT, handler);
+}
+
+/** Throw, announcing first if the session is what failed. */
+function raise(error: ApiError): never {
+  if (error.kind === 'auth') window.dispatchEvent(new Event(AUTH_LOST_EVENT));
+  throw error;
+}
+
 /** Frappe wraps thrown messages in HTML and JSON-in-a-string. Dig out something
  *  a field user can act on. */
 function readableError(body: unknown, fallback: string): string {
@@ -205,13 +224,13 @@ export async function call<T>(
       // An HTML body from a Frappe method almost always means the session died
       // and we were handed the login page.
       if (/<html/i.test(text)) {
-        throw new ApiError('Your session has expired. Please sign in again.', 'auth', response.status);
+        raise(new ApiError('Your session has expired. Please sign in again.', 'auth', response.status));
       }
       body = null;
     }
   }
 
-  if (!response.ok) throw classify(response.status, body);
+  if (!response.ok) raise(classify(response.status, body));
 
   return (body as { message?: T })?.message as T;
 }

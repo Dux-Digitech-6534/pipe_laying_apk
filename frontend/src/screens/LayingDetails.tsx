@@ -148,14 +148,30 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
     values.include_murum === 1 &&
     (!values.murum_length || !values.murum_width || !values.murum_depth);
 
+  // The pipe item is what makes the row mean anything, so it cannot stay
+  // optional. Without it: the diameter is unreadable so Pipe Volume is 0, which
+  // inflates Backfilling (Total Excavation − Murum − Pipe Volume); and
+  // api.create_material_issue skips any row with no pipe_details, so submitting
+  // issues the accessories but never the pipe. Cards on this site have already
+  // been locked that way — length recorded, no stock moved.
+  const pipeItemMissing = !values.pipe_details;
+
   const canSubmit =
-    !!values.date && !trenchMissing && !murumIncomplete && lengthProblems.length === 0;
+    !!values.date &&
+    !trenchMissing &&
+    !pipeItemMissing &&
+    !murumIncomplete &&
+    lengthProblems.length === 0;
 
   const submit = async () => {
     setTouched(true);
 
     if (trenchMissing) {
       toast.err(t('fill_lwd'));
+      return;
+    }
+    if (pipeItemMissing) {
+      toast.err(t('pick_pipe_item'));
       return;
     }
     if (murumIncomplete) {
@@ -393,8 +409,9 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
               onChange={(value) => set('pipe_details', value)}
               options={cascade.pipeItems}
               t={t}
-              optional
+              required
               icon={<IconBox />}
+              error={touched && pipeItemMissing ? t('required') : null}
               // The diameter is read out of the item name (e.g. "200mm HDPE").
               // Echoing it back confirms the app parsed the item the same way
               // the volume formula will.

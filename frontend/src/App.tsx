@@ -144,10 +144,13 @@ export function App() {
     );
   }
 
-  // No session AND nothing cached to work from: the only useful thing to offer
-  // is a way in. If capabilities WERE cached, the user has a usable offline app
-  // and shouldn't be pushed to a login page they may not be able to reach.
-  if (needsLogin && !caps.user) {
+  // Offer a way in when the session is dead — but not at the cost of an app the
+  // user can still work in. Offline with cached capabilities, stay put: the
+  // login page needs a network they haven't got, and the outbox keeps working.
+  // Online, sign in. Cached capabilities used to suppress this entirely, which
+  // left a signed-out user on a working-looking app where every screen that
+  // wasn't cached failed with Frappe's raw "is not whitelisted" text.
+  if (needsLogin && (!caps.user || syncState.online)) {
     // "Expired" is only true if this device had a session before. A first-time
     // visitor just needs to sign in, and telling them something expired is wrong.
     return <Login reason={hadSession ? 'expired' : 'guest'} />;

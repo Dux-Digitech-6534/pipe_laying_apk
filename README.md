@@ -83,9 +83,12 @@ for a radio that can't reach anything).
 
 **Replay is idempotent**, so a retry after a dropped connection can't double-post:
 
-- **Card creation** dedupes on the doctype's own natural key — the same 8 fields
-  `pour_card.py` already rejects duplicates on. A replay resolves to the existing
-  card instead of creating a second one.
+- **Card creation** dedupes on the doctype's own natural key — the same fields
+  `pour_card.py` rejects duplicates on. A replay resolves to the existing card
+  instead of creating a second one. A field the app leaves blank (village_name
+  always; zone_name outside Distribution; component when unset) counts as
+  *blank* in that key rather than switching the check off — which is what both
+  sides used to do, leaving every mobile card un-deduped.
 - **Laying batches** carry a client-generated uid, ledgered as a Comment on the
   Pour Card (`plm-batch:<uid>`). A repeat is recognised and skipped. Bonus: the
   desk timeline gains an audit trail of mobile entries.

@@ -53,12 +53,20 @@ TABLES = {
     "backfill": "custom__backfilling_details",  # Backfilling Detail child
 }
 
-# The 8 fields pour_card.py's validate() uses for its duplicate check. Reused
-# here as the natural idempotency key for offline replay.
-DUP_KEY = [
-    "company", "townproject", "zone_name", "village_name",
-    "component", "select_contractor", "from_junction", "to_junction",
+# The natural key a Pour Card is unique on — the same rule pour_card.py's
+# validate() enforces, reused here as the idempotency key for offline replay.
+#
+# Split in two because half of it is nullable: the mobile form never captures
+# village_name, zone_name is Distribution-only, and component is optional. Both
+# sides used to skip the check entirely when any of the eight was blank, which
+# made it inert for every card this app creates — and took save_card()'s replay
+# guarantee down with it. So a blank is now part of the key, not an escape from
+# it: only the always-present fields are required to run the check, and the
+# nullable ones are matched as "also blank".
+DUP_KEY_REQUIRED = [
+    "company", "townproject", "select_contractor", "from_junction", "to_junction",
 ]
+DUP_KEY_NULLABLE = ["zone_name", "village_name", "component"]
 
 HEADER_FIELDS = [
     "townproject", "zone_name", "village_name", "component",
@@ -310,14 +318,24 @@ def _recalc_total_quantity(doc):
 
 
 def _find_duplicate(header, company, exclude=None):
-    """Existing non-cancelled card with the same natural key, if any."""
+    """Existing non-cancelled card with the same natural key, if any.
+
+    A blank nullable field matches other cards that are blank there too — it
+    does not wave the check through. See DUP_KEY_REQUIRED / DUP_KEY_NULLABLE.
+    """
     values = dict(header)
     values["company"] = company
 
-    if not all(values.get(f) for f in DUP_KEY):
+    if not all(values.get(f) for f in DUP_KEY_REQUIRED):
         return None
 
-    filters = {f: values[f] for f in DUP_KEY}
+    filters = {f: values[f] for f in DUP_KEY_REQUIRED}
+    for field in DUP_KEY_NULLABLE:
+        # A bare None here builds `IS NULL`, which misses the rows that store
+        # "" instead — and tabPour Card holds both forms. "not set" is
+        # `IS NULL OR = ''`, so it catches either.
+        filters[field] = values.get(field) or ["is", "not set"]
+
     filters["docstatus"] = ["<", 2]
     if exclude:
         filters["name"] = ["!=", exclude]
@@ -789,6 +807,14 @@ def add_laying_batch(pour_card, values, batch_uid=None):
         frappe.throw(_("Date is required."))
     if not (flt(v.get("pipe_length")) and flt(v.get("pipe_width")) and flt(v.get("pipe_depth"))):
         frappe.throw(_("Please fill Length, Width and Depth."))
+    # Without the item there is no diameter, so Pipe Volume computes to 0 and
+    # Backfilling (Total Excavation - Murum - Pipe Volume) comes out too high;
+    # worse, api.create_material_issue skips any pipe row with no pipe_details,
+    # so the card locks having issued the accessories but never the pipe.
+    # Enforced here and not only in the form so a stale client, or a batch
+    # queued offline by an older build, cannot reopen the hole.
+    if not v.get("pipe_details"):
+        frappe.throw(_("Pipe Details is required — without it no pipe stock is issued."))
     if cint(v.get("include_murum")) and not (
         flt(v.get("murum_length")) and flt(v.get("murum_width")) and flt(v.get("murum_depth"))
     ):

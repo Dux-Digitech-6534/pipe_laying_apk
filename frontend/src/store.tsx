@@ -13,7 +13,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ApiError, boot, fetchCapabilities, fetchMasters } from './api';
+import { ApiError, boot, fetchCapabilities, fetchMasters, onAuthLost } from './api';
 import { KEY_CAPS, KEY_MASTERS, sync } from './sync';
 import { kvGet, kvSet } from './db';
 import { translate, type Lang, type T } from './i18n';
@@ -149,10 +149,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         // A dead session must be distinguished from no signal: one needs the
         // login page, the other needs the cached data we already loaded.
-        if (
-          error instanceof ApiError &&
-          (error.kind === 'auth' || error.kind === 'permission')
-        ) {
+        //
+        // 'permission' is deliberately NOT treated as a login prompt — signing
+        // in again cannot grant a role, so that would just loop the user
+        // through a form that changes nothing. An unauthorised user gets the
+        // empty lists their permissions imply, which is the correct answer.
+        if (error instanceof ApiError && error.kind === 'auth') {
           setNeedsLogin(true);
         }
       }
@@ -172,6 +174,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Boot is not the only place a session dies — it can lapse while the app sits
+  // open on a phone in someone's pocket. Any call that hits a signed-out server
+  // reports it here, so the shell reacts once instead of each screen inventing
+  // its own error text.
+  useEffect(() => onAuthLost(() => setNeedsLogin(true)), []);
 
   useEffect(() => {
     const unsubscribe = sync.subscribe(setSyncState);
