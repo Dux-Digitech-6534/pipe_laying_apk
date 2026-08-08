@@ -127,7 +127,7 @@ function valuesFromEntry(card: CardDetail, pipeId: string): LayingValues | null 
 
     accessories: (acc?.accessories as string) ?? null,
     accessories_qty: num(acc?.qauntity),
-    remark: String(acc?.remark ?? ''),
+    remark: String(pipe.custom_remark ?? ''),
   };
 }
 

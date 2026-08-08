@@ -643,6 +643,7 @@ def get_card(name):
             "date_of_pipelaying", "pipe_details", "length_of_pipemtr",
             "width_of_pipemtr", "depth_of_pipemtr", "pipe_calculated_qty",
             "custom_bedding", "murum_churibedding", "strata_name", "attachment",
+            "custom_remark",
         ]),
         "soft": rows(TABLES["soft"], ["date_soft_rock", "lengthmtr", "widthmtr", "depthmtr"]),
         "hard": rows(TABLES["hard"], [
@@ -756,6 +757,7 @@ def _append_batch_rows(doc, pipe_id, date, v, totals):
         "pipe_calculated_qty": totals["pipe_calculated_qty"],
         "custom_bedding": flt(v.get("bedding_depth")),
         "murum_churibedding": "Yes" if cint(v.get("include_murum")) else "No",
+        "custom_remark": (v.get("remark") or None),
     })
     _append(doc, TABLES["hard"], {
         "pipe_id": pipe_id,

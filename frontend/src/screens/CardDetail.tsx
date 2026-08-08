@@ -518,6 +518,10 @@ function EntryCard({
             />
           ))}
 
+          {pipe?.custom_remark ? (
+            <Row label={t('remark')} main={String(pipe.custom_remark)} />
+          ) : null}
+
           {canEdit ? (
             <div className="entry-actions">
               <button type="button" className="entry-act" onClick={onEdit} disabled={busy}>
