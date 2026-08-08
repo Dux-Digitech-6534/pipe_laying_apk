@@ -741,6 +741,77 @@ def save_card(payload):
     return {"name": doc.name, "docstatus": cint(doc.docstatus), "created": created}
 
 
+def _append_batch_rows(doc, pipe_id, date, v, totals):
+    """Append one laying batch's rows — pipe / hard / soft / murum / soil / cc /
+    accessories — all sharing one pipe_id. Shared by add_laying_batch and
+    update_laying_batch so the two can never drift (the strata bug came from two
+    copies of this)."""
+    _append(doc, TABLES["pipe"], {
+        "pipe_id": pipe_id,
+        "date_of_pipelaying": date,
+        "pipe_details": v.get("pipe_details"),
+        "length_of_pipemtr": flt(v.get("pipe_length")),
+        "width_of_pipemtr": flt(v.get("pipe_width")),
+        "depth_of_pipemtr": flt(v.get("pipe_depth")),
+        "pipe_calculated_qty": totals["pipe_calculated_qty"],
+        "custom_bedding": flt(v.get("bedding_depth")),
+        "murum_churibedding": "Yes" if cint(v.get("include_murum")) else "No",
+    })
+    _append(doc, TABLES["hard"], {
+        "pipe_id": pipe_id,
+        "hard_rocks_date": date,
+        "hard_rock_lengthmtr": flt(v.get("hard_length")),
+        "hard_rock_widthmtr": flt(v.get("hard_width")),
+        "hard_rock_depthmtr": flt(v.get("hard_depth")),
+    })
+    _append(doc, TABLES["soft"], {
+        "pipe_id": pipe_id,
+        "date_soft_rock": date,
+        "lengthmtr": flt(v.get("soft_length")),
+        "widthmtr": flt(v.get("soft_width")),
+        "depthmtr": flt(v.get("soft_depth")),
+    })
+    if cint(v.get("include_murum")):
+        _append(doc, TABLES["murum"], {
+            "pipe_id": pipe_id,
+            "hard_rocks_date": date,
+            "hard_rock_lengthmtr": flt(v.get("murum_length")),
+            "hard_rock_widthmtr": flt(v.get("murum_width")),
+            "hard_rock_depthmtr": flt(v.get("murum_depth")),
+        })
+    _append(doc, TABLES["soil"], {
+        "pipe_id": pipe_id,
+        "date": date,
+        "soil_excavation_qty": totals["soil_excavation_qty"],
+    })
+    _append(doc, TABLES["cc"], {
+        "pipe_id": pipe_id,
+        "date_of_cc_road": date,
+        "cc_road_badding_length": flt(v.get("cc_length")),
+        "cc_road_badding_width": flt(v.get("cc_width")),
+        "cc_road_breaking_depth": flt(v.get("cc_depth")),
+    })
+    if v.get("accessories") and cint(v.get("accessories_qty")) > 0:
+        doc.append(TABLES["acc"], {
+            "pipe_id": pipe_id,
+            "date_accessories": date,
+            "accessories": v.get("accessories"),
+            "qauntity": cint(v.get("accessories_qty")),
+        })
+
+
+def _remove_batch_rows(doc, pipe_id):
+    """Drop every child row (all 7 tables) that belongs to one batch's pipe_id.
+    Mobile writes pipe_id on every row including CC, so a batch is fully keyed."""
+    target = (pipe_id or "").strip()
+    for field in (
+        TABLES["pipe"], TABLES["hard"], TABLES["soft"], TABLES["murum"],
+        TABLES["soil"], TABLES["cc"], TABLES["acc"],
+    ):
+        kept = [r for r in (doc.get(field) or []) if (r.get("pipe_id") or "").strip() != target]
+        doc.set(field, kept)
+
+
 @frappe.whitelist()
 def add_laying_batch(pour_card, values, batch_uid=None):
     """Add one 'Pour Card Details' batch — the app's core write.
@@ -791,65 +862,7 @@ def add_laying_batch(pour_card, values, batch_uid=None):
     if cint(doc.docstatus) == 1:
         doc.flags.ignore_validate_update_after_submit = True
 
-    _append(doc, TABLES["pipe"], {
-        "pipe_id": pipe_id,
-        "date_of_pipelaying": date,
-        "pipe_details": v.get("pipe_details"),
-        "length_of_pipemtr": flt(v.get("pipe_length")),
-        "width_of_pipemtr": flt(v.get("pipe_width")),
-        "depth_of_pipemtr": flt(v.get("pipe_depth")),
-        "pipe_calculated_qty": totals["pipe_calculated_qty"],
-        "custom_bedding": flt(v.get("bedding_depth")),
-        "murum_churibedding": "Yes" if cint(v.get("include_murum")) else "No",
-        "strata_name": v.get("strata_name") or None,
-    })
-
-    _append(doc, TABLES["hard"], {
-        "pipe_id": pipe_id,
-        "hard_rocks_date": date,
-        "hard_rock_lengthmtr": flt(v.get("hard_length")),
-        "hard_rock_widthmtr": flt(v.get("hard_width")),
-        "hard_rock_depthmtr": flt(v.get("hard_depth")),
-    })
-
-    _append(doc, TABLES["soft"], {
-        "pipe_id": pipe_id,
-        "date_soft_rock": date,
-        "lengthmtr": flt(v.get("soft_length")),
-        "widthmtr": flt(v.get("soft_width")),
-        "depthmtr": flt(v.get("soft_depth")),
-    })
-
-    if cint(v.get("include_murum")):
-        _append(doc, TABLES["murum"], {
-            "pipe_id": pipe_id,
-            "hard_rocks_date": date,
-            "hard_rock_lengthmtr": flt(v.get("murum_length")),
-            "hard_rock_widthmtr": flt(v.get("murum_width")),
-            "hard_rock_depthmtr": flt(v.get("murum_depth")),
-        })
-
-    _append(doc, TABLES["soil"], {
-        "pipe_id": pipe_id,
-        "date": date,
-        "soil_excavation_qty": totals["soil_excavation_qty"],
-    })
-
-    _append(doc, TABLES["cc"], {
-        "pipe_id": pipe_id,
-        "date_of_cc_road": date,
-        "cc_road_badding_length": flt(v.get("cc_length")),
-        "cc_road_badding_width": flt(v.get("cc_width")),
-        "cc_road_breaking_depth": flt(v.get("cc_depth")),
-    })
-
-    if v.get("accessories") and cint(v.get("accessories_qty")) > 0:
-        doc.append(TABLES["acc"], {
-            "pipe_id": pipe_id,
-            "date_accessories": date,
-            "accessories": v.get("accessories"),
-            "qauntity": cint(v.get("accessories_qty")),
-        })
+    _append_batch_rows(doc, pipe_id, date, v, totals)
 
     _recalc_total_quantity(doc)
 
@@ -863,6 +876,81 @@ def add_laying_batch(pour_card, values, batch_uid=None):
         "docstatus": cint(doc.docstatus),
         "pipe_id": pipe_id,
         "totals": totals,
+        "total_quantity": flt(doc.total_quantity),
+    }
+
+
+@frappe.whitelist()
+def update_laying_batch(pour_card, pipe_id, values):
+    """Edit one existing laying batch (every row sharing pipe_id) on a DRAFT card.
+
+    Replaces the batch in place: drop its old rows, re-append from the new values
+    under the SAME pipe_id (so the entry keeps its id), then recompute. Draft
+    only — a submitted card's entries are locked, exactly like the desk. Derived
+    quantities are recomputed server-side, same as add."""
+    v = _parse(values)
+
+    doc = frappe.get_doc("Pour Card", pour_card)
+    doc.check_permission("write")
+    if cint(doc.docstatus) != 0:
+        frappe.throw(_("Only a draft Pour Card's entries can be edited."))
+
+    pipe_id = (pipe_id or "").strip()
+    if not pipe_id:
+        frappe.throw(_("Missing entry id."))
+    if not any((r.get("pipe_id") or "").strip() == pipe_id for r in (doc.get(TABLES["pipe"]) or [])):
+        frappe.throw(_("Entry {0} was not found on this card.").format(pipe_id))
+
+    if not v.get("date"):
+        frappe.throw(_("Date is required."))
+    if not (flt(v.get("pipe_length")) and flt(v.get("pipe_width")) and flt(v.get("pipe_depth"))):
+        frappe.throw(_("Please fill Length, Width and Depth."))
+    if cint(v.get("include_murum")) and not (
+        flt(v.get("murum_length")) and flt(v.get("murum_width")) and flt(v.get("murum_depth"))
+    ):
+        frappe.throw(_("Please fill Murum Length, Width and Depth."))
+    _validate_lengths(v)
+
+    totals = derive_laying_totals(v)
+
+    _remove_batch_rows(doc, pipe_id)
+    _append_batch_rows(doc, pipe_id, v.get("date"), v, totals)
+    _recalc_total_quantity(doc)
+
+    doc.save()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": cint(doc.docstatus),
+        "pipe_id": pipe_id,
+        "totals": totals,
+        "total_quantity": flt(doc.total_quantity),
+    }
+
+
+@frappe.whitelist()
+def delete_laying_batch(pour_card, pipe_id):
+    """Remove one laying batch (every row sharing pipe_id) from a DRAFT card."""
+    doc = frappe.get_doc("Pour Card", pour_card)
+    doc.check_permission("write")
+    if cint(doc.docstatus) != 0:
+        frappe.throw(_("Only a draft Pour Card's entries can be deleted."))
+
+    pipe_id = (pipe_id or "").strip()
+    if not pipe_id:
+        frappe.throw(_("Missing entry id."))
+
+    _remove_batch_rows(doc, pipe_id)
+    _recalc_total_quantity(doc)
+
+    doc.save()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": cint(doc.docstatus),
+        "removed": pipe_id,
         "total_quantity": flt(doc.total_quantity),
     }
 

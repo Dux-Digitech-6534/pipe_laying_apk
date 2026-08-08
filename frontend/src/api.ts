@@ -27,6 +27,8 @@ export const API = {
   getCard: PREFIX + 'get_card',
   saveCard: PREFIX + 'save_card',
   addLayingBatch: PREFIX + 'add_laying_batch',
+  updateLayingBatch: PREFIX + 'update_laying_batch',
+  deleteLayingBatch: PREFIX + 'delete_laying_batch',
   submitCard: PREFIX + 'submit_card',
   calcBackfilling: PREFIX + 'calc_backfilling',
   checkDuplicate: PREFIX + 'check_duplicate',
@@ -298,6 +300,22 @@ export const submitCard = (name: string) =>
     API.submitCard,
     { name },
     { post: true, timeoutMs: 60000 },
+  );
+
+/** Edit one laying batch (all rows under a Pipe ID) on a draft card. Online-only
+ *  — unlike add, this isn't queued: the server replaces the batch in place. */
+export const updateLayingBatch = (pourCard: string, pipeId: string, values: LayingValues) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; pipe_id: string; total_quantity?: number }>(
+    API.updateLayingBatch,
+    { pour_card: pourCard, pipe_id: pipeId, values: JSON.stringify(values) },
+    { post: true, timeoutMs: 60000 },
+  );
+
+export const deleteLayingBatch = (pourCard: string, pipeId: string) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; removed: string; total_quantity?: number }>(
+    API.deleteLayingBatch,
+    { pour_card: pourCard, pipe_id: pipeId },
+    { post: true, timeoutMs: 30000 },
   );
 
 export const saveBackfilling = (pourCard: string, rows: string[], date: string) =>

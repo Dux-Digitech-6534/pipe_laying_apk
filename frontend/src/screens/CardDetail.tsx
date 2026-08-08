@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import { fmt, fmtDate, fmtWhen, num } from '../calc';
 import { isLocalName } from '../db';
+import { ApiError, deleteLayingBatch } from '../api';
 import { sync } from '../sync';
 import { useStore } from '../store';
 import { navigate } from '../router';
@@ -27,6 +28,7 @@ import {
   IconPlus,
   IconSend,
   IconSparkle,
+  IconTrash,
 } from '../icons';
 import type { CardDetail as Detail, ChildRow, OutboxOp } from '../types';
 
@@ -56,6 +58,8 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
   const toast = useToast();
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const local = isLocalName(cardName);
 
@@ -109,6 +113,26 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
       toast.ok(t('submit_card'));
     } else {
       toast.info(t('submit_needs_online'));
+    }
+  };
+
+  const doDelete = async () => {
+    const pipeId = confirmDelete;
+    setConfirmDelete(null);
+    if (!pipeId) return;
+    if (!syncState.online) {
+      toast.err(t('edit_needs_online'));
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteLayingBatch(cardName, pipeId);
+      toast.ok(t('entry_deleted'));
+      onReload();
+    } catch (error) {
+      toast.err(error instanceof ApiError ? error.message : t('error_generic'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -263,15 +287,25 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
             {!entries.length ? (
               <div className="empty-sec">{t('no_entries')}</div>
             ) : (
-              entries.map((entry) => (
-                <EntryCard
-                  key={entry.pipeId}
-                  entry={entry}
-                  open={open === entry.pipeId}
-                  onToggle={() => setOpen(open === entry.pipeId ? null : entry.pipeId)}
-                  t={t}
-                />
-              ))
+              entries.map((entry) => {
+                const pipeId = entry.pipe?.pipe_id ? String(entry.pipe.pipe_id) : null;
+                const canEdit = card.docstatus === 0 && card.can_write && !local && !!pipeId;
+                return (
+                  <EntryCard
+                    key={entry.pipeId}
+                    entry={entry}
+                    open={open === entry.pipeId}
+                    onToggle={() => setOpen(open === entry.pipeId ? null : entry.pipeId)}
+                    t={t}
+                    canEdit={canEdit}
+                    busy={deleting}
+                    onEdit={() =>
+                      pipeId && navigate({ name: 'edit-laying', id: card.name, pipeId })
+                    }
+                    onDelete={() => pipeId && setConfirmDelete(pipeId)}
+                  />
+                );
+              })
             )}
           </div>
 
@@ -329,6 +363,17 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
         onConfirm={doSubmit}
         onCancel={() => setConfirmSubmit(false)}
       />
+
+      <Confirm
+        open={!!confirmDelete}
+        title={t('delete_entry_title')}
+        body={t('delete_entry_body', { name: confirmDelete ?? '' })}
+        confirmLabel={t('delete')}
+        cancelLabel={t('cancel')}
+        danger
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </>
   );
 }
@@ -356,11 +401,19 @@ function EntryCard({
   open,
   onToggle,
   t,
+  canEdit,
+  busy,
+  onEdit,
+  onDelete,
 }: {
   entry: Entry;
   open: boolean;
   onToggle: () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  canEdit?: boolean;
+  busy?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const pipe = entry.pipe;
   const trench = num(pipe?.pipe_calculated_qty);
@@ -454,10 +507,6 @@ function EntryCard({
             />
           ) : null}
 
-          {pipe?.strata_name ? (
-            <Row label={t('strata')} main={String(pipe.strata_name)} />
-          ) : null}
-
           {entry.acc.map((row, index) => (
             <Row
               key={index}
@@ -468,6 +517,23 @@ function EntryCard({
               precision={0}
             />
           ))}
+
+          {canEdit ? (
+            <div className="entry-actions">
+              <button type="button" className="entry-act" onClick={onEdit} disabled={busy}>
+                {t('edit')}
+              </button>
+              <button
+                type="button"
+                className="entry-act danger"
+                onClick={onDelete}
+                disabled={busy}
+              >
+                <IconTrash size="sm" />
+                <span>{t('delete')}</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

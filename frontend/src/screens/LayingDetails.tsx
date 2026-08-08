@@ -20,8 +20,10 @@ import {
   extractDiameterMm,
   findLengthProblems,
   fmt,
+  num,
   todayISO,
 } from '../calc';
+import { ApiError, updateLayingBatch } from '../api';
 import { sync } from '../sync';
 import { useCascade, useStore } from '../store';
 import { goBack } from '../router';
@@ -32,6 +34,7 @@ import {
   IconAlert,
   IconBox,
   IconCalendar,
+  IconCheck,
   IconCloudOff,
   IconDrop,
   IconHat,
@@ -79,13 +82,66 @@ function emptyValues(contractor: string | null): LayingValues {
   };
 }
 
+/** Rebuild the form values for one existing entry (Pipe ID) from the card's
+ *  child rows, so editing opens pre-filled. Returns null if the entry isn't on
+ *  the card (e.g. it hasn't loaded yet). */
+function valuesFromEntry(card: CardDetail, pipeId: string): LayingValues | null {
+  const find = (rows: CardDetail['pipe']) => rows.find((row) => row.pipe_id === pipeId);
+  const pipe = find(card.pipe);
+  if (!pipe) return null;
+
+  const cc = find(card.cc);
+  const soft = find(card.soft);
+  const hard = find(card.hard);
+  const murum = find(card.murum);
+  const acc = find(card.acc);
+
+  return {
+    date: String(pipe.date_of_pipelaying ?? todayISO()).slice(0, 10),
+    select_contractor: card.contractor ?? null,
+
+    pipe_length: num(pipe.length_of_pipemtr),
+    pipe_width: num(pipe.width_of_pipemtr),
+    pipe_depth: num(pipe.depth_of_pipemtr),
+
+    cc_length: num(cc?.cc_road_badding_length),
+    cc_width: num(cc?.cc_road_badding_width),
+    cc_depth: num(cc?.cc_road_breaking_depth),
+
+    soft_length: num(soft?.lengthmtr),
+    soft_width: num(soft?.widthmtr),
+    soft_depth: num(soft?.depthmtr),
+
+    hard_length: num(hard?.hard_rock_lengthmtr),
+    hard_width: num(hard?.hard_rock_widthmtr),
+    hard_depth: num(hard?.hard_rock_depthmtr),
+
+    pipe_details: (pipe.pipe_details as string) ?? null,
+    bedding_depth: num(pipe.custom_bedding),
+    strata_name: null,
+
+    include_murum: murum ? 1 : 0,
+    murum_length: num(murum?.hard_rock_lengthmtr),
+    murum_width: num(murum?.hard_rock_widthmtr),
+    murum_depth: num(murum?.hard_rock_depthmtr),
+
+    accessories: (acc?.accessories as string) ?? null,
+    accessories_qty: num(acc?.qauntity),
+    remark: String(acc?.remark ?? ''),
+  };
+}
+
 interface Props {
   card: CardDetail | null;
   cardName: string;
+  /** When set, this screen edits the existing batch with this Pipe ID instead
+   *  of adding a new one. Online-only. */
+  editPipeId?: string;
   onAdded: () => void;
 }
 
-export function LayingDetails({ card, cardName, onAdded }: Props) {
+export function LayingDetails({ card, cardName, editPipeId, onAdded }: Props) {
+  const editing = !!editPipeId;
   const { t, masters, syncState } = useStore();
   const cascade = useCascade(masters);
   const toast = useToast();
@@ -101,12 +157,25 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
   // field is still untouched, so we never overwrite a deliberate choice.
   const contractorTouched = useRef(false);
   useEffect(() => {
+    if (editing) return; // edit mode hydrates the whole form below
     if (contractorTouched.current) return;
     if (!card?.contractor) return;
     setValues((current) =>
       current.select_contractor ? current : { ...current, select_contractor: card.contractor },
     );
-  }, [card?.contractor]);
+  }, [card?.contractor, editing]);
+
+  // Edit mode: the card loads after this screen mounts, so pre-fill from the
+  // entry once it's available — but only once, so we never clobber user edits.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!editing || hydrated.current || !card || !editPipeId) return;
+    const reconstructed = valuesFromEntry(card, editPipeId);
+    if (reconstructed) {
+      hydrated.current = true;
+      setValues(reconstructed);
+    }
+  }, [card, editPipeId, editing]);
 
   const set = <K extends keyof LayingValues>(key: K, value: LayingValues[K]) => {
     setValues((current) => {
@@ -141,7 +210,11 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
     (!values.murum_length || !values.murum_width || !values.murum_depth);
 
   const canSubmit =
-    !!values.date && !trenchMissing && !murumIncomplete && lengthProblems.length === 0;
+    !!values.date &&
+    !trenchMissing &&
+    !murumIncomplete &&
+    lengthProblems.length === 0 &&
+    (!editing || syncState.online);
 
   const submit = async () => {
     setTouched(true);
@@ -166,20 +239,31 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
       return;
     }
 
+    if (editing && !syncState.online) {
+      toast.err(t('edit_needs_online'));
+      return;
+    }
+
     setSaving(true);
     try {
-      await sync.queueLayingBatch(cardName, values);
-      // Let a fast connection finish so the new Pipe ID is on screen when we go
-      // back; if it doesn't, the entry shows as pending instead.
-      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      if (editing) {
+        // Online, in place — no outbox. The server replaces this batch's rows.
+        await updateLayingBatch(cardName, editPipeId!, values);
+        toast.ok(t('entry_updated'));
+      } else {
+        await sync.queueLayingBatch(cardName, values);
+        // Let a fast connection finish so the new Pipe ID is on screen when we
+        // go back; if it doesn't, the entry shows as pending instead.
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
 
-      if (syncState.online) toast.ok(t('entry_saved'));
-      else toast.info(t('saved_offline'));
+        if (syncState.online) toast.ok(t('entry_saved'));
+        else toast.info(t('saved_offline'));
+      }
 
       onAdded();
       goBack({ name: 'card', id: cardName });
-    } catch {
-      toast.err(t('error_generic'));
+    } catch (error) {
+      toast.err(error instanceof ApiError ? error.message : t('error_generic'));
     } finally {
       setSaving(false);
     }
@@ -193,7 +277,7 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
         <div className="pad">
           {!syncState.online ? (
             <Note kind="warn" icon={<IconCloudOff />} style={{ marginBottom: 14 }}>
-              {t('working_offline')}
+              {editing ? t('edit_needs_online') : t('working_offline')}
             </Note>
           ) : null}
 
@@ -494,7 +578,7 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
 
           <div className="divider" />
           <Note style={{ marginBottom: 14 }} icon={<IconCalendar />}>
-            {t('pipe_id_note')}
+            {editing ? t('edit_note') : t('pipe_id_note')}
           </Note>
         </div>
       </div>
@@ -514,8 +598,8 @@ export function LayingDetails({ card, cardName, onAdded }: Props) {
             disabled={saving || !canSubmit}
             style={{ flex: '2 1 0' }}
           >
-            <IconPlus />
-            <span>{t('add_entry')}</span>
+            {editing ? <IconCheck /> : <IconPlus />}
+            <span>{editing ? t('save_changes') : t('add_entry')}</span>
           </button>
         </div>
       </div>

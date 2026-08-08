@@ -50,7 +50,10 @@ export function App() {
   }, [caps.user]);
 
   const cardId =
-    route.name === 'card' || route.name === 'laying' || route.name === 'backfill'
+    route.name === 'card' ||
+    route.name === 'laying' ||
+    route.name === 'backfill' ||
+    route.name === 'edit-laying'
       ? route.id
       : null;
 
@@ -184,6 +187,7 @@ function AppBar({ route, card }: { route: Route; card: CardDetail | null }) {
     transfer: t('material_transfer'),
     card: card?.name ?? t('card_detail'),
     laying: t('laying_details'),
+    'edit-laying': t('edit_entry'),
     backfill: t('backfilling'),
     sync: t('sync_queue'),
     settings: t('settings'),
@@ -300,6 +304,15 @@ function Screen({
       );
     case 'laying':
       return <LayingDetails card={card} cardName={route.id} onAdded={onReload} />;
+    case 'edit-laying':
+      return (
+        <LayingDetails
+          card={card}
+          cardName={route.id}
+          editPipeId={route.pipeId}
+          onAdded={onReload}
+        />
+      );
     case 'backfill':
       return <Backfilling card={card} onReload={onReload} />;
     case 'sync':

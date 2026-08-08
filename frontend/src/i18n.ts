@@ -235,6 +235,18 @@ const en: Dict = {
   mt_needs_online: 'Material Transfer needs a connection.',
   mt_no_permission: 'You do not have permission to create Stock Entries.',
   mt_note: 'Creates a real Stock Entry — ERPNext stock rules run on submit.',
+
+  // edit / delete laying entries
+  edit_entry: 'Edit Entry',
+  edit: 'Edit',
+  delete: 'Delete',
+  save_changes: 'Save Changes',
+  entry_updated: 'Entry updated',
+  entry_deleted: 'Entry deleted',
+  edit_needs_online: 'Editing needs a connection.',
+  edit_note: 'Saving replaces this entry and recomputes the totals.',
+  delete_entry_title: 'Delete this entry?',
+  delete_entry_body: 'Remove {name} and all its rows from this card? This cannot be undone.',
 };
 
 const hi: Dict = {
@@ -455,6 +467,18 @@ const hi: Dict = {
   mt_needs_online: 'मटेरियल ट्रांसफर के लिए कनेक्शन ज़रूरी है।',
   mt_no_permission: 'आपको स्टॉक एंट्री बनाने की अनुमति नहीं है।',
   mt_note: 'असली स्टॉक एंट्री बनती है — सबमिट पर ERPNext के स्टॉक नियम लागू होते हैं।',
+
+  // edit / delete laying entries
+  edit_entry: 'एंट्री एडिट करें',
+  edit: 'एडिट',
+  delete: 'डिलीट',
+  save_changes: 'बदलाव सेव करें',
+  entry_updated: 'एंट्री अपडेट हो गई',
+  entry_deleted: 'एंट्री डिलीट हो गई',
+  edit_needs_online: 'एडिट के लिए कनेक्शन ज़रूरी है।',
+  edit_note: 'सेव करने पर ये एंट्री बदल जाती है और totals दोबारा जुड़ते हैं।',
+  delete_entry_title: 'ये एंट्री डिलीट करें?',
+  delete_entry_body: '{name} और इसकी सारी rows इस कार्ड से हटा दें? ये वापस नहीं होगा।',
 };
 
 const DICTS: Record<Lang, Dict> = { en, hi };

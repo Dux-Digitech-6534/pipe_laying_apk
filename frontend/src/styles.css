@@ -1260,6 +1260,35 @@ input[type='date']::-webkit-calendar-picker-indicator { opacity: 0.45; cursor: p
 }
 .mt-add:active { background: var(--iris-tint); }
 
+/* ------------------------------------------- edit / delete a laying entry */
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.entry-act {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.entry-act:active { background: var(--bg-sunken); }
+.entry-act:disabled { opacity: 0.5; cursor: default; }
+.entry-act.danger { color: var(--err); }
+.entry-act.danger:active { background: var(--err-bg); }
+.entry-act.danger svg { width: 14px; height: 14px; }
+
 /* ------------------------------------------------------------- empty/skel */
 
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
