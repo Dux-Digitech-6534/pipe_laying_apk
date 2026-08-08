@@ -120,8 +120,8 @@ const en: Dict = {
   no_entries: 'No laying details yet',
   no_entries_hint: 'Add the first entry for this card.',
   pipe_id: 'Pipe ID',
-  submit_card: 'Submit',
-  submit_confirm_title: 'Submit this Pour Card?',
+  submit_card: 'Lock Entry',
+  submit_confirm_title: 'Lock this Pour Card?',
   submit_confirm_body:
     'Submitting creates the Material Issue stock entry and locks the header. This cannot be undone from the app.',
   submit_queued: 'Submit queued — it will run when you have signal.',
@@ -355,8 +355,8 @@ const hi: Dict = {
   no_entries: 'अभी कोई लेइंग डिटेल नहीं',
   no_entries_hint: 'इस कार्ड की पहली एंट्री जोड़ें।',
   pipe_id: 'पाइप आईडी',
-  submit_card: 'सबमिट',
-  submit_confirm_title: 'यह पोर कार्ड सबमिट करें?',
+  submit_card: 'लॉक एंट्री',
+  submit_confirm_title: 'यह पोर कार्ड लॉक करें?',
   submit_confirm_body:
     'सबमिट करने पर मटेरियल इशू स्टॉक एंट्री बनेगी और हेडर लॉक हो जाएगा। ऐप से वापस नहीं हो सकता।',
   submit_queued: 'सबमिट कतार में — नेटवर्क आने पर चलेगा।',
