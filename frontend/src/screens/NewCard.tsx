@@ -34,6 +34,12 @@ const EMPTY: CardHeader = {
   to_junction: '',
 };
 
+/** Zone applies only to Distribution-network components. For every other
+ *  component the Zone field stays hidden and unset. */
+function isDistributionComponent(component: string | null): boolean {
+  return !!component && component.toLowerCase().includes('distribution');
+}
+
 export function NewCard() {
   const { t, caps, masters, syncState } = useStore();
   const cascade = useCascade(masters);
@@ -55,6 +61,11 @@ export function NewCard() {
         next.zone_name = null;
         next.component = null;
         next.select_contractor = null;
+      }
+      // Zone belongs only to Distribution components — drop it whenever the
+      // component is cleared or switched to a non-Distribution one.
+      if (key === 'component' && !isDistributionComponent(next.component)) {
+        next.zone_name = null;
       }
       return next;
     });
@@ -78,7 +89,9 @@ export function NewCard() {
   const errors = useMemo(() => {
     const found: Partial<Record<keyof CardHeader, string>> = {};
     if (!form.townproject) found.townproject = t('required');
-    if (!form.zone_name) found.zone_name = t('required');
+    if (isDistributionComponent(form.component) && !form.zone_name) {
+      found.zone_name = t('required');
+    }
     if (!form.select_contractor) found.select_contractor = t('required');
     if (!form.from_junction) found.from_junction = t('required');
     if (!form.to_junction) found.to_junction = t('required');
@@ -142,6 +155,7 @@ export function NewCard() {
   const show = (key: keyof CardHeader) => (touched ? errors[key] ?? null : null);
   const project = form.townproject;
   const projectHint = project ? t('no_results') : t('select_project_first');
+  const showZone = isDistributionComponent(form.component);
 
   if (!caps.create) {
     return (
@@ -186,23 +200,7 @@ export function NewCard() {
             error={show('townproject')}
           />
 
-          {/* Village removed: village_name is reqd=0 and hidden on the desk
-              Pour Card, so it is not collected here. Zone stays — it is reqd=1
-              on Pour Card. */}
-          <div style={{ marginBottom: 14 }}>
-            <Picker
-              label={t('zone')}
-              value={form.zone_name}
-              onChange={(value) => set('zone_name', value)}
-              options={cascade.zonesFor(project)}
-              t={t}
-              required
-              disabled={!project}
-              emptyHint={projectHint}
-              icon={<IconPin />}
-              error={show('zone_name')}
-            />
-          </div>
+          {/* Village is never collected on mobile (reqd=0, hidden on the desk). */}
 
           <Picker
             label={t('component')}
@@ -215,6 +213,22 @@ export function NewCard() {
             emptyHint={projectHint}
             icon={<IconDrop />}
           />
+
+          {/* Zone shows only for a Distribution component, directly below it. */}
+          {showZone ? (
+            <Picker
+              label={t('zone')}
+              value={form.zone_name}
+              onChange={(value) => set('zone_name', value)}
+              options={cascade.zonesFor(project)}
+              t={t}
+              required
+              disabled={!project}
+              emptyHint={projectHint}
+              icon={<IconPin />}
+              error={show('zone_name')}
+            />
+          ) : null}
 
           <Picker
             label={t('contractor')}
