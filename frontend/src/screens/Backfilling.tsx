@@ -67,21 +67,31 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
 
   const calculated = useMemo(() => {
     const keys = new Set(selected);
+    const murumRows = card?.murum ?? [];
     return rows
       .filter((row) => keys.has(row.pipe_id ?? String(row.idx)))
       .map((row) => {
         const length = num(row.length_of_pipemtr);
         const width = num(row.width_of_pipemtr);
         const depth = num(row.depth_of_pipemtr);
-        // Bedding is `custom_bedding` on Pipe Laying Detail Child.
-        const bedding = num(row.custom_bedding);
+
+        // Murum comes from the entry's own Murum Details (matched by Pipe ID) —
+        // the L×W×D the user entered in the laying, not L×W×bedding.
+        const murumRow = murumRows.find(
+          (m) => (m.pipe_id ?? null) === (row.pipe_id ?? null),
+        );
+        const murumQty = murumRow
+          ? num(murumRow.hard_rock_lengthmtr) *
+            num(murumRow.hard_rock_widthmtr) *
+            num(murumRow.hard_rock_depthmtr)
+          : 0;
 
         const result = calcBackfillRow({
           pipe_details: row.pipe_details as string,
           length,
           width,
           depth,
-          bedding_depth: bedding,
+          murum_qty: murumQty,
         });
 
         return {
@@ -91,11 +101,10 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
           length,
           width,
           depth,
-          bedding,
           ...result,
         };
       });
-  }, [rows, selected]);
+  }, [rows, selected, card]);
 
   const totals = useMemo(
     () =>
@@ -111,7 +120,7 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
     [calculated],
   );
 
-  const anyBedding = calculated.some((row) => row.bedding > 0);
+  const anyMurum = calculated.some((row) => row.murum_qty > 0);
 
   const persist = async () => {
     if (!card || !calculated.length) return;
@@ -160,7 +169,7 @@ export function Backfilling({ card, onReload }: { card: CardDetail | null; onRel
             />
           </div>
 
-          {!anyBedding ? (
+          {!anyMurum ? (
             <Note kind="warn" icon={<IconInfo />} style={{ marginTop: 12 }}>
               {t('backfill_note')}
             </Note>

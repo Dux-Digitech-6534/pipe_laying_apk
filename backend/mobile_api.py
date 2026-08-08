@@ -1022,18 +1022,25 @@ def calc_backfilling(pour_card, rows=None, date=None, save=0):
         length = flt(row.get("length_of_pipemtr"))
         width = flt(row.get("width_of_pipemtr"))
         depth = flt(row.get("depth_of_pipemtr"))
-        # Bedding lives on the custom field `custom_bedding` (label "Bedding").
-        # The desk backfilling script finds it by label match; we address it
-        # directly. NOTE the repo's api.py and the "Show Bedding Field" client
-        # script both reference `bedding_depthmtr`, which does not exist on this
-        # site — those writes are silently dropped.
-        bedding = flt(row.get("custom_bedding"))
+        bedding = flt(row.get("custom_bedding"))  # kept for the response only
 
         diameter_mm = extract_diameter_mm(row.get("pipe_details"))
         diameter_m = diameter_mm / 1000.0
 
+        # Murum for backfilling = the entry's Murum Details (table_md) quantity,
+        # matched by Pipe ID — i.e. the Murum the user actually entered in the
+        # laying (L×W×D). The desk formula L×W×bedding always came out 0 here
+        # because bedding is never captured on this app.
+        pid = row.get("pipe_id")
+        murum_qty = sum(
+            flt(m.get("hard_rock_lengthmtr"))
+            * flt(m.get("hard_rock_widthmtr"))
+            * flt(m.get("hard_rock_depthmtr"))
+            for m in (doc.get(TABLES["murum"]) or [])
+            if (m.get("pipe_id") or None) == (pid or None)
+        )
+
         total_excavation = length * width * depth
-        murum_qty = length * width * bedding
         pipe_volume = (3.14 * diameter_m * diameter_m / 4.0) * length
 
         out.append({

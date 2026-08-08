@@ -134,7 +134,7 @@ const en: Dict = {
   no_pipe_rows: 'No pipe rows to calculate',
   save_backfilling: 'Save to Pour Card',
   backfill_saved: 'Backfilling saved',
-  backfill_note: 'Bedding depth comes from each pipe row. Rows with no bedding show murum as 0.',
+  backfill_note: "Murum comes from each entry's Murum details. Entries with no Murum show 0.",
 
   // sync screen
   sync_queue: 'Sync queue',
@@ -369,7 +369,7 @@ const hi: Dict = {
   no_pipe_rows: 'गणना के लिए कोई पाइप पंक्ति नहीं',
   save_backfilling: 'पोर कार्ड में सेव करें',
   backfill_saved: 'बैकफिलिंग सेव हो गई',
-  backfill_note: 'बेडिंग गहराई हर पाइप पंक्ति से आती है। बेडिंग न हो तो मुरुम 0 दिखेगा।',
+  backfill_note: 'मुरुम हर एंट्री के Murum details से आता है। जिसमें Murum नहीं, वहाँ 0 दिखेगा।',
 
   sync_queue: 'सिंक कतार',
   needs_attention: 'ध्यान दें',
