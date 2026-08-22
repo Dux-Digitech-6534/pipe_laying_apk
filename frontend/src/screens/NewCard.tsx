@@ -254,20 +254,18 @@ export function NewCard() {
               label={t('from_junction')}
               value={form.from_junction}
               onChange={(value) => set('from_junction', value)}
-              sanitize={numLike}
               required
-              maxLength={20}
-              placeholder="e.g. 4.2(9.2)"
+              maxLength={30}
+              placeholder="e.g. 4.2(9.2) / MH-4"
               error={show('from_junction')}
             />
             <TextField
               label={t('to_junction')}
               value={form.to_junction}
               onChange={(value) => set('to_junction', value)}
-              sanitize={numLike}
               required
-              maxLength={20}
-              placeholder="e.g. 4.2(9.2)"
+              maxLength={30}
+              placeholder="e.g. 4.2(9.2) / MH-4"
               error={show('to_junction')}
             />
           </div>
