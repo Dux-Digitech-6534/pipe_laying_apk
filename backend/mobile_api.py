@@ -63,6 +63,7 @@ DUP_KEY = [
 HEADER_FIELDS = [
     "townproject", "zone_name", "village_name", "component",
     "select_contractor", "from_junction", "to_junction",
+    "custom_chainage_from", "custom_chainage_to",
 ]
 
 BATCH_LEDGER_PREFIX = "plm-batch:"
@@ -325,16 +326,20 @@ def _find_duplicate(header, company, exclude=None):
     return frappe.db.exists("Pour Card", filters)
 
 
+_JUNCTION_CHARS = set("0123456789.()")
+
+
 def _clean_junction(value, label):
-    """From/To Junction are digits-only (mirrors the 'From jn , To jn' and
-    'Pour Card From,To Junction rule' desk scripts)."""
+    """From/To Junction and Chainage accept a number with an optional decimal
+    and bracket notation, e.g. 4.2(9.2) — digits, '.', '(' and ')' only. (The
+    desk scripts still enforce digits-only there; this is the mobile rule.)"""
     if value in (None, ""):
         return None
     text = str(value).strip()
-    if not text.isdigit():
+    if not text or (set(text) - _JUNCTION_CHARS) or not any(c.isdigit() for c in text):
         frappe.throw(
-            _("{0} must be a whole number (digits only).").format(label),
-            title=_("Invalid Junction"),
+            _("{0} must be a number like 4.2(9.2) — only digits, a decimal point and brackets.").format(label),
+            title=_("Invalid Value"),
         )
     return text
 
@@ -630,6 +635,8 @@ def get_card(name):
         "contractor": doc.select_contractor,
         "from_junction": doc.from_junction,
         "to_junction": doc.to_junction,
+        "chainage_from": doc.get("custom_chainage_from"),
+        "chainage_to": doc.get("custom_chainage_to"),
         "company": doc.company,
         "material_issue": doc.material_issue,
         "total_quantity": flt(doc.total_quantity),
@@ -692,6 +699,8 @@ def save_card(payload):
     header = {f: (data.get(f) or None) for f in HEADER_FIELDS}
     header["from_junction"] = _clean_junction(header["from_junction"], _("From Junction"))
     header["to_junction"] = _clean_junction(header["to_junction"], _("To Junction"))
+    header["custom_chainage_from"] = _clean_junction(header["custom_chainage_from"], _("Chainage From"))
+    header["custom_chainage_to"] = _clean_junction(header["custom_chainage_to"], _("Chainage To"))
 
     if header["from_junction"] and header["from_junction"] == header["to_junction"]:
         frappe.throw(

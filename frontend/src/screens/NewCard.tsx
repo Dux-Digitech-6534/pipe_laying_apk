@@ -32,7 +32,13 @@ const EMPTY: CardHeader = {
   select_contractor: null,
   from_junction: '',
   to_junction: '',
+  custom_chainage_from: '',
+  custom_chainage_to: '',
 };
+
+/** Junction & Chainage keep only digits, a decimal point and brackets, so a
+ *  value like 4.2(9.2) is allowed but stray letters/spaces are not. */
+const numLike = (raw: string) => raw.replace(/[^0-9.()]/g, '');
 
 /** Zone applies only to Distribution-network components. For every other
  *  component the Zone field stays hidden and unset. */
@@ -248,21 +254,44 @@ export function NewCard() {
               label={t('from_junction')}
               value={form.from_junction}
               onChange={(value) => set('from_junction', value)}
-              digitsOnly
+              sanitize={numLike}
               required
-              maxLength={10}
-              placeholder="e.g. 16"
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
               error={show('from_junction')}
             />
             <TextField
               label={t('to_junction')}
               value={form.to_junction}
               onChange={(value) => set('to_junction', value)}
-              digitsOnly
+              sanitize={numLike}
               required
-              maxLength={10}
-              placeholder="e.g. 17"
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
               error={show('to_junction')}
+            />
+          </div>
+
+          <div className="grid2" style={{ marginBottom: 8 }}>
+            <TextField
+              label={t('chainage_from')}
+              value={form.custom_chainage_from}
+              onChange={(value) => set('custom_chainage_from', value)}
+              sanitize={numLike}
+              optional
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
+              t={t}
+            />
+            <TextField
+              label={t('chainage_to')}
+              value={form.custom_chainage_to}
+              onChange={(value) => set('custom_chainage_to', value)}
+              sanitize={numLike}
+              optional
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
+              t={t}
             />
           </div>
 

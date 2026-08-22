@@ -262,6 +262,13 @@ export function CardDetailScreen({ card, cardName, loading, queued, onReload }: 
                   v={`${card.from_junction} → ${card.to_junction}`}
                   mono
                 />
+                {card.chainage_from || card.chainage_to ? (
+                  <Cell
+                    k={t('chainage')}
+                    v={`${card.chainage_from ?? '—'} → ${card.chainage_to ?? '—'}`}
+                    mono
+                  />
+                ) : null}
                 <Cell k={t('component')} v={card.component} />
                 <Cell k={t('total_quantity')} v={fmt(card.total_quantity, 0)} mono />
               </div>

@@ -99,6 +99,8 @@ export interface CardDetail {
   contractor: string | null;
   from_junction: string | null;
   to_junction: string | null;
+  chainage_from: string | null;
+  chainage_to: string | null;
   company: string | null;
   material_issue: string | null;
   total_quantity: number;
@@ -135,6 +137,8 @@ export interface CardHeader {
   select_contractor: string | null;
   from_junction: string;
   to_junction: string;
+  custom_chainage_from: string;
+  custom_chainage_to: string;
 }
 
 /** The Add Laying Details form — one "batch" writing across 7 child tables. */
