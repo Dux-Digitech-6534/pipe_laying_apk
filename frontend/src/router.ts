@@ -15,16 +15,27 @@ export type Route =
   | { name: 'cards'; status?: string }
   | { name: 'card'; id: string }
   | { name: 'new' }
+  | { name: 'transfer' }
   | { name: 'laying'; id: string }
+  | { name: 'edit-laying'; id: string; pipeId: string }
   | { name: 'backfill'; id: string }
   | { name: 'sync' }
   | { name: 'settings' };
 
 export function parseHash(hash: string): Route {
   const clean = hash.replace(/^#\/?/, '');
-  const [head, tail] = clean.split('/');
+  const parts = clean.split('/');
+  const [head, tail] = parts;
 
   switch (head) {
+    case 'edit-laying':
+      return parts[1] && parts[2]
+        ? {
+            name: 'edit-laying',
+            id: decodeURIComponent(parts[1]),
+            pipeId: decodeURIComponent(parts[2]),
+          }
+        : { name: 'cards' };
     case '':
     case 'home':
       return { name: 'home' };
@@ -34,6 +45,8 @@ export function parseHash(hash: string): Route {
       return tail ? { name: 'card', id: decodeURIComponent(tail) } : { name: 'cards' };
     case 'new':
       return { name: 'new' };
+    case 'transfer':
+      return { name: 'transfer' };
     case 'laying':
       return tail ? { name: 'laying', id: decodeURIComponent(tail) } : { name: 'cards' };
     case 'backfill':
@@ -57,8 +70,12 @@ export function routeToHash(route: Route): string {
       return `#/card/${encodeURIComponent(route.id)}`;
     case 'new':
       return '#/new';
+    case 'transfer':
+      return '#/transfer';
     case 'laying':
       return `#/laying/${encodeURIComponent(route.id)}`;
+    case 'edit-laying':
+      return `#/edit-laying/${encodeURIComponent(route.id)}/${encodeURIComponent(route.pipeId)}`;
     case 'backfill':
       return `#/backfill/${encodeURIComponent(route.id)}`;
     case 'sync':

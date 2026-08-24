@@ -39,6 +39,7 @@ ACC_ITEM_GROUPS = [
     "Sluice Valve", "M.S. Elanged", "Rabbar Packing", "Water Mtr.",
     "EF Reducer", "Strup Bend", "EF couplar", "EF Equal TEE",
     "EF End Cap", "EF Bend 45",
+    "DI Fittings",  # DI fittings imported from the client's Fitings.xlsx (2026-08-22)
 ]
 
 # Pour Card child-table fieldname -> child doctype (verified against live meta)
@@ -63,6 +64,7 @@ DUP_KEY = [
 HEADER_FIELDS = [
     "townproject", "zone_name", "village_name", "component",
     "select_contractor", "from_junction", "to_junction",
+    "custom_chainage_from", "custom_chainage_to",
 ]
 
 BATCH_LEDGER_PREFIX = "plm-batch:"
@@ -325,16 +327,28 @@ def _find_duplicate(header, company, exclude=None):
     return frappe.db.exists("Pour Card", filters)
 
 
+_NUMLIKE_CHARS = set("0123456789.()")
+
+
 def _clean_junction(value, label):
-    """From/To Junction are digits-only (mirrors the 'From jn , To jn' and
-    'Pour Card From,To Junction rule' desk scripts)."""
+    """From/To Junction are free alphanumeric IDs (Data field) — any text is
+    allowed, e.g. 4.2(9.2), 355 or MH-4. Only blank is rejected (the doctype
+    also marks them mandatory)."""
+    if value in (None, ""):
+        return None
+    return str(value).strip() or None
+
+
+def _clean_chainage(value, label):
+    """Chainage accepts a number with an optional decimal and bracket notation,
+    e.g. 4.2(9.2) — digits, '.', '(' and ')' only."""
     if value in (None, ""):
         return None
     text = str(value).strip()
-    if not text.isdigit():
+    if not text or (set(text) - _NUMLIKE_CHARS) or not any(c.isdigit() for c in text):
         frappe.throw(
-            _("{0} must be a whole number (digits only).").format(label),
-            title=_("Invalid Junction"),
+            _("{0} must be a number like 4.2(9.2) — only digits, a decimal point and brackets.").format(label),
+            title=_("Invalid Value"),
         )
     return text
 
@@ -418,26 +432,32 @@ def get_masters():
     return {
         "rev": rev,
         "fetched_at": frappe.utils.now(),
-        "projects": frappe.get_all("Site Project", fields=["name"], order_by="name", limit_page_length=0),
-        "zones": frappe.get_all(
+        # get_list (NOT get_all) so the user's User Permissions apply, exactly
+        # like the desk link fields: a user restricted to a Site Project sees
+        # only that site here, and — because a Site Project user-permission with
+        # apply_to_all_doctypes propagates to every doctype that links to it —
+        # only that site's zones / villages / components / contractors too.
+        # An unrestricted user (no Site Project user-permission) still sees all.
+        "projects": frappe.get_list("Site Project", fields=["name"], order_by="name", limit_page_length=0),
+        "zones": frappe.get_list(
             "Zone Details",
             fields=["name", "town_project as project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "villages": frappe.get_all(
+        "villages": frappe.get_list(
             "Pipe Laying Village Details",
             fields=["name", "townproject as project", "zone_name as zone"],
             order_by="name",
             limit_page_length=0,
         ),
-        "components": frappe.get_all(
+        "components": frappe.get_list(
             "Component at Site",
             fields=["name", "project"],
             order_by="name",
             limit_page_length=0,
         ),
-        "contractors": frappe.get_all(
+        "contractors": frappe.get_list(
             "Contractor at Site",
             fields=["name", "project", "contractor"],
             order_by="name",
@@ -459,6 +479,58 @@ def get_masters():
         ),
         "companies": frappe.get_all("Company", fields=["name", "abbr"], limit_page_length=0),
     }
+
+
+@frappe.whitelist()
+def mt_masters():
+    """Warehouses + companies for the Material Transfer screen.
+
+    get_list (not get_all) so the user's User Permissions apply — a user scoped
+    to a Company sees only that company's warehouses, exactly like the desk
+    Warehouse link field. `can_create`/`can_submit` mirror the real Stock Entry
+    permission gates (save/submit enforce them server-side regardless).
+    """
+    _require("read")
+
+    return {
+        "warehouses": frappe.get_list(
+            "Warehouse",
+            filters={"is_group": 0, "disabled": 0},
+            fields=["name", "warehouse_name", "company"],
+            order_by="name",
+            limit_page_length=0,
+        ),
+        "companies": frappe.get_list(
+            "Company", fields=["name", "abbr"], order_by="name", limit_page_length=0
+        ),
+        "default_company": frappe.defaults.get_user_default("company") or _default_company(),
+        "can_create": bool(frappe.has_permission("Stock Entry", "create")),
+        "can_submit": bool(frappe.has_permission("Stock Entry", "submit")),
+    }
+
+
+@frappe.whitelist()
+def item_search(q=None, limit=25):
+    """Server-side Item search for the transfer item picker — there are 3000+
+    items, far too many to ship to the phone. Matches item code or name,
+    permission-scoped via get_list."""
+    _require("read")
+
+    text = (q or "").strip()
+    filters = {"disabled": 0}
+    or_filters = None
+    if text:
+        like = "%{0}%".format(text)
+        or_filters = {"name": ["like", like], "item_name": ["like", like]}
+
+    return frappe.get_list(
+        "Item",
+        filters=filters,
+        or_filters=or_filters,
+        fields=["name", "item_name", "stock_uom", "item_group"],
+        order_by="modified desc",
+        limit_page_length=cint(limit) or 25,
+    )
 
 
 @frappe.whitelist()
@@ -572,6 +644,8 @@ def get_card(name):
         "contractor": doc.select_contractor,
         "from_junction": doc.from_junction,
         "to_junction": doc.to_junction,
+        "chainage_from": doc.get("custom_chainage_from"),
+        "chainage_to": doc.get("custom_chainage_to"),
         "company": doc.company,
         "material_issue": doc.material_issue,
         "total_quantity": flt(doc.total_quantity),
@@ -585,6 +659,7 @@ def get_card(name):
             "date_of_pipelaying", "pipe_details", "length_of_pipemtr",
             "width_of_pipemtr", "depth_of_pipemtr", "pipe_calculated_qty",
             "custom_bedding", "murum_churibedding", "strata_name", "attachment",
+            "custom_remark",
         ]),
         "soft": rows(TABLES["soft"], ["date_soft_rock", "lengthmtr", "widthmtr", "depthmtr"]),
         "hard": rows(TABLES["hard"], [
@@ -633,6 +708,8 @@ def save_card(payload):
     header = {f: (data.get(f) or None) for f in HEADER_FIELDS}
     header["from_junction"] = _clean_junction(header["from_junction"], _("From Junction"))
     header["to_junction"] = _clean_junction(header["to_junction"], _("To Junction"))
+    header["custom_chainage_from"] = _clean_chainage(header["custom_chainage_from"], _("Chainage From"))
+    header["custom_chainage_to"] = _clean_chainage(header["custom_chainage_to"], _("Chainage To"))
 
     if header["from_junction"] and header["from_junction"] == header["to_junction"]:
         frappe.throw(
@@ -681,6 +758,78 @@ def save_card(payload):
     frappe.db.commit()
 
     return {"name": doc.name, "docstatus": cint(doc.docstatus), "created": created}
+
+
+def _append_batch_rows(doc, pipe_id, date, v, totals):
+    """Append one laying batch's rows — pipe / hard / soft / murum / soil / cc /
+    accessories — all sharing one pipe_id. Shared by add_laying_batch and
+    update_laying_batch so the two can never drift (the strata bug came from two
+    copies of this)."""
+    _append(doc, TABLES["pipe"], {
+        "pipe_id": pipe_id,
+        "date_of_pipelaying": date,
+        "pipe_details": v.get("pipe_details"),
+        "length_of_pipemtr": flt(v.get("pipe_length")),
+        "width_of_pipemtr": flt(v.get("pipe_width")),
+        "depth_of_pipemtr": flt(v.get("pipe_depth")),
+        "pipe_calculated_qty": totals["pipe_calculated_qty"],
+        "custom_bedding": flt(v.get("bedding_depth")),
+        "murum_churibedding": "Yes" if cint(v.get("include_murum")) else "No",
+        "custom_remark": (v.get("remark") or None),
+    })
+    _append(doc, TABLES["hard"], {
+        "pipe_id": pipe_id,
+        "hard_rocks_date": date,
+        "hard_rock_lengthmtr": flt(v.get("hard_length")),
+        "hard_rock_widthmtr": flt(v.get("hard_width")),
+        "hard_rock_depthmtr": flt(v.get("hard_depth")),
+    })
+    _append(doc, TABLES["soft"], {
+        "pipe_id": pipe_id,
+        "date_soft_rock": date,
+        "lengthmtr": flt(v.get("soft_length")),
+        "widthmtr": flt(v.get("soft_width")),
+        "depthmtr": flt(v.get("soft_depth")),
+    })
+    if cint(v.get("include_murum")):
+        _append(doc, TABLES["murum"], {
+            "pipe_id": pipe_id,
+            "hard_rocks_date": date,
+            "hard_rock_lengthmtr": flt(v.get("murum_length")),
+            "hard_rock_widthmtr": flt(v.get("murum_width")),
+            "hard_rock_depthmtr": flt(v.get("murum_depth")),
+        })
+    _append(doc, TABLES["soil"], {
+        "pipe_id": pipe_id,
+        "date": date,
+        "soil_excavation_qty": totals["soil_excavation_qty"],
+    })
+    _append(doc, TABLES["cc"], {
+        "pipe_id": pipe_id,
+        "date_of_cc_road": date,
+        "cc_road_badding_length": flt(v.get("cc_length")),
+        "cc_road_badding_width": flt(v.get("cc_width")),
+        "cc_road_breaking_depth": flt(v.get("cc_depth")),
+    })
+    if v.get("accessories") and cint(v.get("accessories_qty")) > 0:
+        doc.append(TABLES["acc"], {
+            "pipe_id": pipe_id,
+            "date_accessories": date,
+            "accessories": v.get("accessories"),
+            "qauntity": cint(v.get("accessories_qty")),
+        })
+
+
+def _remove_batch_rows(doc, pipe_id):
+    """Drop every child row (all 7 tables) that belongs to one batch's pipe_id.
+    Mobile writes pipe_id on every row including CC, so a batch is fully keyed."""
+    target = (pipe_id or "").strip()
+    for field in (
+        TABLES["pipe"], TABLES["hard"], TABLES["soft"], TABLES["murum"],
+        TABLES["soil"], TABLES["cc"], TABLES["acc"],
+    ):
+        kept = [r for r in (doc.get(field) or []) if (r.get("pipe_id") or "").strip() != target]
+        doc.set(field, kept)
 
 
 @frappe.whitelist()
@@ -733,65 +882,7 @@ def add_laying_batch(pour_card, values, batch_uid=None):
     if cint(doc.docstatus) == 1:
         doc.flags.ignore_validate_update_after_submit = True
 
-    _append(doc, TABLES["pipe"], {
-        "pipe_id": pipe_id,
-        "date_of_pipelaying": date,
-        "pipe_details": v.get("pipe_details"),
-        "length_of_pipemtr": flt(v.get("pipe_length")),
-        "width_of_pipemtr": flt(v.get("pipe_width")),
-        "depth_of_pipemtr": flt(v.get("pipe_depth")),
-        "pipe_calculated_qty": totals["pipe_calculated_qty"],
-        "custom_bedding": flt(v.get("bedding_depth")),
-        "murum_churibedding": "Yes" if cint(v.get("include_murum")) else "No",
-        "strata_name": v.get("strata_name") or None,
-    })
-
-    _append(doc, TABLES["hard"], {
-        "pipe_id": pipe_id,
-        "hard_rocks_date": date,
-        "hard_rock_lengthmtr": flt(v.get("hard_length")),
-        "hard_rock_widthmtr": flt(v.get("hard_width")),
-        "hard_rock_depthmtr": flt(v.get("hard_depth")),
-    })
-
-    _append(doc, TABLES["soft"], {
-        "pipe_id": pipe_id,
-        "date_soft_rock": date,
-        "lengthmtr": flt(v.get("soft_length")),
-        "widthmtr": flt(v.get("soft_width")),
-        "depthmtr": flt(v.get("soft_depth")),
-    })
-
-    if cint(v.get("include_murum")):
-        _append(doc, TABLES["murum"], {
-            "pipe_id": pipe_id,
-            "hard_rocks_date": date,
-            "hard_rock_lengthmtr": flt(v.get("murum_length")),
-            "hard_rock_widthmtr": flt(v.get("murum_width")),
-            "hard_rock_depthmtr": flt(v.get("murum_depth")),
-        })
-
-    _append(doc, TABLES["soil"], {
-        "pipe_id": pipe_id,
-        "date": date,
-        "soil_excavation_qty": totals["soil_excavation_qty"],
-    })
-
-    _append(doc, TABLES["cc"], {
-        "pipe_id": pipe_id,
-        "date_of_cc_road": date,
-        "cc_road_badding_length": flt(v.get("cc_length")),
-        "cc_road_badding_width": flt(v.get("cc_width")),
-        "cc_road_breaking_depth": flt(v.get("cc_depth")),
-    })
-
-    if v.get("accessories") and cint(v.get("accessories_qty")) > 0:
-        doc.append(TABLES["acc"], {
-            "pipe_id": pipe_id,
-            "date_accessories": date,
-            "accessories": v.get("accessories"),
-            "qauntity": cint(v.get("accessories_qty")),
-        })
+    _append_batch_rows(doc, pipe_id, date, v, totals)
 
     _recalc_total_quantity(doc)
 
@@ -805,6 +896,81 @@ def add_laying_batch(pour_card, values, batch_uid=None):
         "docstatus": cint(doc.docstatus),
         "pipe_id": pipe_id,
         "totals": totals,
+        "total_quantity": flt(doc.total_quantity),
+    }
+
+
+@frappe.whitelist()
+def update_laying_batch(pour_card, pipe_id, values):
+    """Edit one existing laying batch (every row sharing pipe_id) on a DRAFT card.
+
+    Replaces the batch in place: drop its old rows, re-append from the new values
+    under the SAME pipe_id (so the entry keeps its id), then recompute. Draft
+    only — a submitted card's entries are locked, exactly like the desk. Derived
+    quantities are recomputed server-side, same as add."""
+    v = _parse(values)
+
+    doc = frappe.get_doc("Pour Card", pour_card)
+    doc.check_permission("write")
+    if cint(doc.docstatus) != 0:
+        frappe.throw(_("Only a draft Pour Card's entries can be edited."))
+
+    pipe_id = (pipe_id or "").strip()
+    if not pipe_id:
+        frappe.throw(_("Missing entry id."))
+    if not any((r.get("pipe_id") or "").strip() == pipe_id for r in (doc.get(TABLES["pipe"]) or [])):
+        frappe.throw(_("Entry {0} was not found on this card.").format(pipe_id))
+
+    if not v.get("date"):
+        frappe.throw(_("Date is required."))
+    if not (flt(v.get("pipe_length")) and flt(v.get("pipe_width")) and flt(v.get("pipe_depth"))):
+        frappe.throw(_("Please fill Length, Width and Depth."))
+    if cint(v.get("include_murum")) and not (
+        flt(v.get("murum_length")) and flt(v.get("murum_width")) and flt(v.get("murum_depth"))
+    ):
+        frappe.throw(_("Please fill Murum Length, Width and Depth."))
+    _validate_lengths(v)
+
+    totals = derive_laying_totals(v)
+
+    _remove_batch_rows(doc, pipe_id)
+    _append_batch_rows(doc, pipe_id, v.get("date"), v, totals)
+    _recalc_total_quantity(doc)
+
+    doc.save()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": cint(doc.docstatus),
+        "pipe_id": pipe_id,
+        "totals": totals,
+        "total_quantity": flt(doc.total_quantity),
+    }
+
+
+@frappe.whitelist()
+def delete_laying_batch(pour_card, pipe_id):
+    """Remove one laying batch (every row sharing pipe_id) from a DRAFT card."""
+    doc = frappe.get_doc("Pour Card", pour_card)
+    doc.check_permission("write")
+    if cint(doc.docstatus) != 0:
+        frappe.throw(_("Only a draft Pour Card's entries can be deleted."))
+
+    pipe_id = (pipe_id or "").strip()
+    if not pipe_id:
+        frappe.throw(_("Missing entry id."))
+
+    _remove_batch_rows(doc, pipe_id)
+    _recalc_total_quantity(doc)
+
+    doc.save()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": cint(doc.docstatus),
+        "removed": pipe_id,
         "total_quantity": flt(doc.total_quantity),
     }
 
@@ -874,18 +1040,25 @@ def calc_backfilling(pour_card, rows=None, date=None, save=0):
         length = flt(row.get("length_of_pipemtr"))
         width = flt(row.get("width_of_pipemtr"))
         depth = flt(row.get("depth_of_pipemtr"))
-        # Bedding lives on the custom field `custom_bedding` (label "Bedding").
-        # The desk backfilling script finds it by label match; we address it
-        # directly. NOTE the repo's api.py and the "Show Bedding Field" client
-        # script both reference `bedding_depthmtr`, which does not exist on this
-        # site — those writes are silently dropped.
-        bedding = flt(row.get("custom_bedding"))
+        bedding = flt(row.get("custom_bedding"))  # kept for the response only
 
         diameter_mm = extract_diameter_mm(row.get("pipe_details"))
         diameter_m = diameter_mm / 1000.0
 
+        # Murum for backfilling = the entry's Murum Details (table_md) quantity,
+        # matched by Pipe ID — i.e. the Murum the user actually entered in the
+        # laying (L×W×D). The desk formula L×W×bedding always came out 0 here
+        # because bedding is never captured on this app.
+        pid = row.get("pipe_id")
+        murum_qty = sum(
+            flt(m.get("hard_rock_lengthmtr"))
+            * flt(m.get("hard_rock_widthmtr"))
+            * flt(m.get("hard_rock_depthmtr"))
+            for m in (doc.get(TABLES["murum"]) or [])
+            if (m.get("pipe_id") or None) == (pid or None)
+        )
+
         total_excavation = length * width * depth
-        murum_qty = length * width * bedding
         pipe_volume = (3.14 * diameter_m * diameter_m / 4.0) * length
 
         out.append({

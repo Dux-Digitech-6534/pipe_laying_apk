@@ -9,9 +9,14 @@
 #   ./deploy.sh backend  Python only (skips the frontend build)
 #   ./deploy.sh frontend assets + shell only
 #
-# No worker restart and no bench restart: whitelisted methods are imported on
-# demand, and the www/ pages are plain files resolved per request. Other sites on
-# this bench are never touched.
+# Frontend changes need no reload — the www/ pages are plain files resolved per
+# request. Backend (Python) changes DO: gunicorn runs with --preload, so a plain
+# scp + clear-cache leaves the OLD module running in the workers' memory (console
+# shows the new code, the live app does not). So after a backend deploy this
+# script sends a graceful SIGHUP to the gunicorn MASTER: workers recycle and
+# re-import mobile_api.py from disk with ZERO downtime (the master keeps the
+# listening socket), and no full bench restart — the other sites on this bench are
+# never 502'd.
 
 set -euo pipefail
 
@@ -67,6 +72,37 @@ fi
 
 say "Clearing cache"
 ssh "$HOST" "cd '$BENCH' && bench --site '$SITE' clear-cache"
+
+# --------------------------------------------------------------------- reload
+# Only after a backend deploy, and only a graceful SIGHUP (never a bench restart).
+# Finds the gunicorn MASTER robustly — the frappe.app worker whose parent is NOT
+# itself gunicorn (i.e. supervisord) — so it stays correct after workers recycle.
+# All handled branches exit 0: the code is already on disk, so a reload hiccup
+# should warn, not fail the deploy.
+
+if [ "$MODE" = "all" ] || [ "$MODE" = "backend" ]; then
+  say "Reloading web workers (graceful SIGHUP — zero downtime)"
+  ssh "$HOST" '
+    pids=$(pgrep -f "gunicorn.*frappe.app:application" || true)
+    if [ -z "$pids" ]; then
+      echo "  ! gunicorn not found — reload the web workers manually"; exit 0
+    fi
+    master=""
+    for pid in $pids; do
+      ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d " ")
+      if ! printf "%s\n" $pids | grep -qx "$ppid"; then master="$pid"; break; fi
+    done
+    if [ -z "$master" ]; then
+      echo "  ! could not identify gunicorn master — reload manually"; exit 0
+    fi
+    if kill -HUP "$master" 2>/dev/null; then
+      echo "  HUP sent to gunicorn master $master — workers re-importing new code"
+    else
+      echo "  ! HUP failed (permission?) — reload the web workers manually"
+    fi
+    exit 0
+  '
+fi
 
 # --------------------------------------------------------------------- verify
 

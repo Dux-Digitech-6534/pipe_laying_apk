@@ -1121,6 +1121,174 @@ input[type='date']::-webkit-calendar-picker-indicator { opacity: 0.45; cursor: p
 }
 .login .foot b { color: var(--text-muted); font-weight: 500; }
 
+/* in-app login form (replaces the redirect to Frappe's /login) */
+.login { max-width: 420px; margin-inline: auto; width: 100%; }
+.login .field { align-self: stretch; margin-bottom: 15px; }
+.login-err {
+  align-self: stretch;
+  background: var(--err-bg);
+  color: var(--err);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+.pw-toggle {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 4px 2px 4px 8px;
+}
+.pw-toggle:hover { color: var(--iris); }
+.login-submit { width: 100%; margin-top: 6px; justify-content: center; }
+
+/* ------------------------------------------------------- create (+) menu */
+.fab-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 16px calc(var(--safe-bottom) + 84px);
+  background: rgba(15, 20, 35, 0.34);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: fab-fade 0.16s ease;
+}
+@keyframes fab-fade { from { opacity: 0; } to { opacity: 1; } }
+.fab-menu {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  animation: fab-rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes fab-rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+.fab-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.fab-menu-item:last-child { border-bottom: none; }
+.fab-menu-item:active { background: var(--bg-sunken); }
+.fab-menu-item:disabled { opacity: 0.4; cursor: default; }
+.fab-menu-item .fmi-ic {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--iris-tint);
+  color: var(--iris);
+  display: grid;
+  place-items: center;
+}
+.fab-menu-item .fmi-ic svg { width: 20px; height: 20px; }
+.fab-menu-item .fmi-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fab-menu-item .fmi-tx b { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+.fab-menu-item .fmi-tx small { font-size: 11.5px; color: var(--text-muted); }
+.tab.fab .fab-c { transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.tab.fab.menu-open .fab-c { transform: rotate(45deg); }
+
+/* ---------------------------------------------------- material transfer */
+.mt-line {
+  position: relative;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 12px 12px 2px;
+  margin-bottom: 10px;
+}
+.mt-line-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-faint);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.mt-line-x:active { background: var(--err-bg); color: var(--err); }
+.mt-line-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: -4px 0 10px;
+  padding-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mt-add {
+  width: 100%;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: none;
+  color: var(--iris);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mt-add:active { background: var(--iris-tint); }
+
+/* ------------------------------------------- edit / delete a laying entry */
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.entry-act {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.entry-act:active { background: var(--bg-sunken); }
+.entry-act:disabled { opacity: 0.5; cursor: default; }
+.entry-act.danger { color: var(--err); }
+.entry-act.danger:active { background: var(--err-bg); }
+.entry-act.danger svg { width: 14px; height: 14px; }
+
 /* ------------------------------------------------------------- empty/skel */
 
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }

@@ -32,7 +32,19 @@ const EMPTY: CardHeader = {
   select_contractor: null,
   from_junction: '',
   to_junction: '',
+  custom_chainage_from: '',
+  custom_chainage_to: '',
 };
+
+/** Junction & Chainage keep only digits, a decimal point and brackets, so a
+ *  value like 4.2(9.2) is allowed but stray letters/spaces are not. */
+const numLike = (raw: string) => raw.replace(/[^0-9.()]/g, '');
+
+/** Zone applies only to Distribution-network components. For every other
+ *  component the Zone field stays hidden and unset. */
+function isDistributionComponent(component: string | null): boolean {
+  return !!component && component.toLowerCase().includes('distribution');
+}
 
 export function NewCard() {
   const { t, caps, masters, syncState } = useStore();
@@ -53,21 +65,39 @@ export function NewCard() {
       // build a card the server then rejects.
       if (key === 'townproject') {
         next.zone_name = null;
-        next.village_name = null;
         next.component = null;
         next.select_contractor = null;
       }
-      if (key === 'zone_name') next.village_name = null;
+      // Zone belongs only to Distribution components — drop it whenever the
+      // component is cleared or switched to a non-Distribution one.
+      if (key === 'component' && !isDistributionComponent(next.component)) {
+        next.zone_name = null;
+      }
       return next;
     });
     setDuplicate(null);
   };
 
+  // Default to the user's project when their User Permission scopes them to a
+  // single Site Project — one less tap for field staff who only ever work one
+  // site. The picker stays fully editable. Only auto-fills on exactly one
+  // option, so a user with several projects is never silently pinned to the
+  // wrong one; they still choose. Reacts to masters arriving/refreshing, since
+  // the scoped list resolves asynchronously.
+  const projects = cascade.projects;
+  useEffect(() => {
+    if (projects.length !== 1) return;
+    setForm((current) =>
+      current.townproject ? current : { ...current, townproject: projects[0].value },
+    );
+  }, [projects]);
+
   const errors = useMemo(() => {
     const found: Partial<Record<keyof CardHeader, string>> = {};
     if (!form.townproject) found.townproject = t('required');
-    if (!form.zone_name) found.zone_name = t('required');
-    if (!form.village_name) found.village_name = t('required');
+    if (isDistributionComponent(form.component) && !form.zone_name) {
+      found.zone_name = t('required');
+    }
     if (!form.select_contractor) found.select_contractor = t('required');
     if (!form.from_junction) found.from_junction = t('required');
     if (!form.to_junction) found.to_junction = t('required');
@@ -131,6 +161,7 @@ export function NewCard() {
   const show = (key: keyof CardHeader) => (touched ? errors[key] ?? null : null);
   const project = form.townproject;
   const projectHint = project ? t('no_results') : t('select_project_first');
+  const showZone = isDistributionComponent(form.component);
 
   if (!caps.create) {
     return (
@@ -175,32 +206,7 @@ export function NewCard() {
             error={show('townproject')}
           />
 
-          <div className="grid2" style={{ marginBottom: 14 }}>
-            <Picker
-              label={t('zone')}
-              value={form.zone_name}
-              onChange={(value) => set('zone_name', value)}
-              options={cascade.zonesFor(project)}
-              t={t}
-              required
-              disabled={!project}
-              emptyHint={projectHint}
-              icon={<IconPin />}
-              error={show('zone_name')}
-            />
-            <Picker
-              label={t('village')}
-              value={form.village_name}
-              onChange={(value) => set('village_name', value)}
-              options={cascade.villagesFor(project, form.zone_name)}
-              t={t}
-              required
-              disabled={!project}
-              emptyHint={projectHint}
-              icon={<IconPin />}
-              error={show('village_name')}
-            />
-          </div>
+          {/* Village is never collected on mobile (reqd=0, hidden on the desk). */}
 
           <Picker
             label={t('component')}
@@ -213,6 +219,22 @@ export function NewCard() {
             emptyHint={projectHint}
             icon={<IconDrop />}
           />
+
+          {/* Zone shows only for a Distribution component, directly below it. */}
+          {showZone ? (
+            <Picker
+              label={t('zone')}
+              value={form.zone_name}
+              onChange={(value) => set('zone_name', value)}
+              options={cascade.zonesFor(project)}
+              t={t}
+              required
+              disabled={!project}
+              emptyHint={projectHint}
+              icon={<IconPin />}
+              error={show('zone_name')}
+            />
+          ) : null}
 
           <Picker
             label={t('contractor')}
@@ -232,21 +254,42 @@ export function NewCard() {
               label={t('from_junction')}
               value={form.from_junction}
               onChange={(value) => set('from_junction', value)}
-              digitsOnly
               required
-              maxLength={10}
-              placeholder="e.g. 16"
+              maxLength={30}
+              placeholder="e.g. 4.2(9.2) / MH-4"
               error={show('from_junction')}
             />
             <TextField
               label={t('to_junction')}
               value={form.to_junction}
               onChange={(value) => set('to_junction', value)}
-              digitsOnly
               required
-              maxLength={10}
-              placeholder="e.g. 17"
+              maxLength={30}
+              placeholder="e.g. 4.2(9.2) / MH-4"
               error={show('to_junction')}
+            />
+          </div>
+
+          <div className="grid2" style={{ marginBottom: 8 }}>
+            <TextField
+              label={t('chainage_from')}
+              value={form.custom_chainage_from}
+              onChange={(value) => set('custom_chainage_from', value)}
+              sanitize={numLike}
+              optional
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
+              t={t}
+            />
+            <TextField
+              label={t('chainage_to')}
+              value={form.custom_chainage_to}
+              onChange={(value) => set('custom_chainage_to', value)}
+              sanitize={numLike}
+              optional
+              maxLength={20}
+              placeholder="e.g. 4.2(9.2)"
+              t={t}
             />
           </div>
 

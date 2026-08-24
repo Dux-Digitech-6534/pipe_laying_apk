@@ -108,19 +108,22 @@ export function findLengthProblems(v: Partial<LayingValues>): LengthProblem[] {
   return problems;
 }
 
-/** Backfilling for one pipe row. Mirrors pcbf_calculate_backfilling_rows. */
+/** Backfilling for one pipe row. Backfilling = Total Excavation − Murum − Pipe
+ *  Volume. Murum is the entry's own Murum Details quantity (passed in), not
+ *  L×W×bedding — bedding is never captured on this app, so the desk's
+ *  bedding-based murum always came out 0. */
 export function calcBackfillRow(row: {
   pipe_details?: string | null;
   length: number;
   width: number;
   depth: number;
-  bedding_depth: number;
+  murum_qty: number;
 }) {
   const diameterMm = extractDiameterMm(row.pipe_details);
   const diameterM = diameterMm / 1000;
 
   const totalExcavation = num(row.length) * num(row.width) * num(row.depth);
-  const murumQty = num(row.length) * num(row.width) * num(row.bedding_depth);
+  const murumQty = num(row.murum_qty);
   const pipeVolume = ((3.14 * diameterM * diameterM) / 4) * num(row.length);
 
   return {

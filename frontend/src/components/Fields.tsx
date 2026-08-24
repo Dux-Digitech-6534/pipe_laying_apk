@@ -151,8 +151,12 @@ interface TextFieldProps {
   hint?: string;
   error?: string | null;
   placeholder?: string;
-  /** Digits only — From/To Junction, which the backend also enforces. */
+  /** Digits only — the backend also enforces. */
   digitsOnly?: boolean;
+  /** Custom character filter, applied on every keystroke (e.g. junction /
+   *  chainage: digits, decimal point and brackets). Takes precedence over
+   *  digitsOnly. */
+  sanitize?: (raw: string) => string;
   multiline?: boolean;
   maxLength?: number;
   mini?: boolean;
@@ -170,13 +174,15 @@ export function TextField({
   error,
   placeholder,
   digitsOnly,
+  sanitize,
   multiline,
   maxLength,
   mini,
   icon,
   t,
 }: TextFieldProps) {
-  const handle = (raw: string) => onChange(digitsOnly ? raw.replace(/\D/g, '') : raw);
+  const handle = (raw: string) =>
+    onChange(sanitize ? sanitize(raw) : digitsOnly ? raw.replace(/\D/g, '') : raw);
 
   return (
     <div className={`field${mini ? ' mini' : ''}`}>

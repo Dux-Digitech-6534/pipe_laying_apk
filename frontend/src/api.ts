@@ -27,10 +27,18 @@ export const API = {
   getCard: PREFIX + 'get_card',
   saveCard: PREFIX + 'save_card',
   addLayingBatch: PREFIX + 'add_laying_batch',
+  updateLayingBatch: PREFIX + 'update_laying_batch',
+  deleteLayingBatch: PREFIX + 'delete_laying_batch',
   submitCard: PREFIX + 'submit_card',
   calcBackfilling: PREFIX + 'calc_backfilling',
   checkDuplicate: PREFIX + 'check_duplicate',
   syncBatch: PREFIX + 'sync_batch',
+  mtMasters: PREFIX + 'mt_masters',
+  itemSearch: PREFIX + 'item_search',
+  // Material Transfer reuses the existing desk-page endpoints directly — same
+  // logic, same native Stock Entry validation. No mobile-specific wrapper.
+  saveMaterialTransfer: 'pipe_laying_inhouse.api.save_material_transfer',
+  submitMaterialTransfer: 'pipe_laying_inhouse.api.submit_material_transfer',
   logout: 'logout',
 } as const;
 
@@ -213,6 +221,29 @@ export const fetchCapabilities = () => call<Capabilities>(API.capabilities);
 export const fetchMasters = () => call<Masters>(API.masters, {}, { timeoutMs: 45000 });
 export const fetchHomeSummary = () => call<HomeSummary>(API.homeSummary);
 
+// -------------------------------------------------------- material transfer
+export interface Warehouse {
+  name: string;
+  warehouse_name?: string | null;
+  company?: string | null;
+}
+export interface MtMasters {
+  warehouses: Warehouse[];
+  companies: { name: string; abbr?: string }[];
+  default_company: string | null;
+  can_create: boolean;
+  can_submit: boolean;
+}
+export interface ItemHit {
+  name: string;
+  item_name?: string | null;
+  stock_uom?: string | null;
+  item_group?: string | null;
+}
+
+export const fetchMtMasters = () => call<MtMasters>(API.mtMasters, {}, { timeoutMs: 30000 });
+export const searchItems = (q: string) => call<ItemHit[]>(API.itemSearch, { q, limit: 25 });
+
 export const fetchCards = (args: {
   search?: string;
   status?: string;
@@ -271,11 +302,68 @@ export const submitCard = (name: string) =>
     { post: true, timeoutMs: 60000 },
   );
 
+/** Edit one laying batch (all rows under a Pipe ID) on a draft card. Online-only
+ *  — unlike add, this isn't queued: the server replaces the batch in place. */
+export const updateLayingBatch = (pourCard: string, pipeId: string, values: LayingValues) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; pipe_id: string; total_quantity?: number }>(
+    API.updateLayingBatch,
+    { pour_card: pourCard, pipe_id: pipeId, values: JSON.stringify(values) },
+    { post: true, timeoutMs: 60000 },
+  );
+
+export const deleteLayingBatch = (pourCard: string, pipeId: string) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; removed: string; total_quantity?: number }>(
+    API.deleteLayingBatch,
+    { pour_card: pourCard, pipe_id: pipeId },
+    { post: true, timeoutMs: 30000 },
+  );
+
 export const saveBackfilling = (pourCard: string, rows: string[], date: string) =>
   call<BackfillResult>(
     API.calcBackfilling,
     { pour_card: pourCard, rows: JSON.stringify(rows), date, save: 1 },
     { post: true },
+  );
+
+// -------------------------------------------------------- material transfer
+export interface MtItem {
+  item_code: string;
+  qty: number;
+  uom?: string | null;
+  basic_rate?: number | null;
+  s_warehouse?: string | null;
+  t_warehouse?: string | null;
+}
+export interface MtPayload {
+  company: string | null;
+  posting_date: string;
+  from_warehouse: string | null;
+  to_warehouse: string | null;
+  items: MtItem[];
+  name?: string | null;
+}
+
+/** Save (insert/update) a Material Transfer draft — a real Stock Entry, its
+ *  native validate() runs on the server. Returns the assigned name. */
+export const saveMaterialTransfer = (payload: MtPayload) =>
+  call<{ name: string; docstatus: 0 | 1 | 2 }>(
+    API.saveMaterialTransfer,
+    {
+      company: payload.company,
+      posting_date: payload.posting_date,
+      from_warehouse: payload.from_warehouse,
+      to_warehouse: payload.to_warehouse,
+      items: JSON.stringify(payload.items),
+      name: payload.name ?? undefined,
+    },
+    { post: true, timeoutMs: 60000 },
+  );
+
+export const submitMaterialTransfer = (name: string) =>
+  call<{ name: string; docstatus: 0 | 1 | 2; skipped?: boolean }>(
+    API.submitMaterialTransfer,
+    { name },
+    { post: true, timeoutMs: 60000 },
   );
 
 // -------------------------------------------------------------- batch replay
@@ -314,6 +402,56 @@ export const syncOutbox = (ops: OutboxOp[]) =>
     },
     { post: true, timeoutMs: 120000 },
   );
+
+/**
+ * Sign in against Frappe from inside the app — no redirect to the unbranded
+ * /login page. A Guest POST to /api/method/login needs no CSRF token (Frappe
+ * exempts Guests), and on success Frappe sets the session cookie; the caller
+ * then reloads so the static shell re-injects the authenticated CSRF token.
+ */
+export async function login(usr: string, pwd: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  let response: Response;
+  try {
+    response = await fetch('/api/method/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ usr, pwd }).toString(),
+    });
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError';
+    throw new ApiError(aborted ? 'Request timed out' : 'No connection', 'network');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (response.ok) return;
+
+  // Bad credentials come back as 401; surface a clean message rather than
+  // Frappe's HTML.
+  if (response.status === 401) {
+    throw new ApiError('Invalid email or password', 'auth', 401);
+  }
+
+  let body: unknown = null;
+  const text = await response.text().catch(() => '');
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* HTML or plain text — classify() falls back to a status message */
+    }
+  }
+  throw classify(response.status, body);
+}
 
 export async function logout(): Promise<void> {
   try {
