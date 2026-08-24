@@ -39,6 +39,7 @@ ACC_ITEM_GROUPS = [
     "Sluice Valve", "M.S. Elanged", "Rabbar Packing", "Water Mtr.",
     "EF Reducer", "Strup Bend", "EF couplar", "EF Equal TEE",
     "EF End Cap", "EF Bend 45",
+    "DI Fittings",  # DI fittings imported from the client's Fitings.xlsx (2026-08-22)
 ]
 
 # Pour Card child-table fieldname -> child doctype (verified against live meta)
