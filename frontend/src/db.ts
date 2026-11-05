@@ -99,6 +99,21 @@ export async function kvDelete(key: string): Promise<void> {
   }
 }
 
+/** Delete only the kv entries whose key matches. kvClear() takes everything,
+ *  including the access flags and master lists a phone needs to start an entry
+ *  with no signal — callers that only want to drop stale lists use this. */
+export async function kvDeleteWhere(match: (key: string) => boolean): Promise<void> {
+  if (!storageAvailable) return;
+  try {
+    const keys = await tx<IDBValidKey[]>(STORE_KV, 'readonly', (s) => s.getAllKeys());
+    for (const key of keys) {
+      if (typeof key === 'string' && match(key)) await kvDelete(key);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function kvClear(): Promise<void> {
   if (!storageAvailable) return;
   try {

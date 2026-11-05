@@ -4,7 +4,8 @@
 
 import { useState } from 'react';
 import { boot, logout } from '../api';
-import { kvClear } from '../db';
+import { kvDeleteWhere } from '../db';
+import { KEY_CARDS } from '../sync';
 import { useStore, type ThemeChoice } from '../store';
 import { Confirm, useToast } from '../components/Feedback';
 import {
@@ -25,9 +26,21 @@ function initials(fullName: string): string {
 }
 
 export function Settings() {
-  const { t, lang, setLang, theme, setTheme, caps, masters, mastersStale, build, refresh } =
-    useStore();
+  const {
+    t,
+    lang,
+    setLang,
+    theme,
+    setTheme,
+    caps,
+    masters,
+    mastersStale,
+    build,
+    refresh,
+    syncState,
+  } = useStore();
   const toast = useToast();
+  const pending = syncState.queued + syncState.failed;
 
   const [refreshing, setRefreshing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -202,16 +215,22 @@ export function Settings() {
         danger
         onConfirm={async () => {
           setConfirmClear(false);
-          // Read caches only. The outbox lives in its own store and is
-          // deliberately untouched — clearing cache must never lose a field
-          // entry that hasn't reached the server.
-          await kvClear();
-          toast.ok(t('cache_cleared'));
+          // Re-download FIRST. The access flags and master lists are exactly what
+          // lets a phone start an entry with no signal; wiping them and then
+          // failing to fetch them again would leave a crew in a trench unable to
+          // record anything. So the wipe only touches the per-card caches, and
+          // only once fresh copies of the essentials have landed.
           try {
             await refresh();
           } catch {
-            /* offline — it refills on the next connection */
+            toast.err(t('offline'));
+            return;
           }
+          // Read caches only. The outbox lives in its own store and is
+          // deliberately untouched — clearing cache must never lose a field
+          // entry that hasn't reached the server.
+          await kvDeleteWhere((key) => key === KEY_CARDS || key.startsWith('card:'));
+          toast.ok(t('cache_cleared'));
         }}
         onCancel={() => setConfirmClear(false)}
       />
@@ -219,6 +238,9 @@ export function Settings() {
       <Confirm
         open={confirmSignOut}
         title={t('sign_out')}
+        // Signing out does not delete waiting entries, but it does stop them
+        // sending — so say so, rather than let a user sign out "to fix sync".
+        body={pending ? t('sign_out_pending', { n: pending }) : undefined}
         confirmLabel={t('sign_out')}
         cancelLabel={t('cancel')}
         danger

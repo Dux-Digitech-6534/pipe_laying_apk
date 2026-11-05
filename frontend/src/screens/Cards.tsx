@@ -2,16 +2,19 @@
 //
 // Cards sitting in the outbox are merged in so a card created with no signal is
 // visible immediately, badged as pending rather than hidden until it syncs.
+//
+// Each row carries a Delete action (draft / cancelled only): a synced card is
+// removed on the server, a local-only card just drops its queued ops.
 
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCards } from '../api';
+import { ApiError, deleteCard, fetchCards } from '../api';
 import { kvGet, kvSet } from '../db';
 import { KEY_CARDS, sync } from '../sync';
 import { useStore } from '../store';
 import { navigate } from '../router';
 import { fmtWhen } from '../calc';
-import { EmptyState, Skeleton, StatusChip } from '../components/Feedback';
-import { IconLayers, IconSearch, IconX } from '../icons';
+import { Confirm, EmptyState, Skeleton, StatusChip, useToast } from '../components/Feedback';
+import { IconLayers, IconSearch, IconTrash, IconX } from '../icons';
 import type { CardSummary, OutboxOp } from '../types';
 
 type Filter = 'all' | 'draft' | 'submitted' | 'cancelled';
@@ -19,7 +22,8 @@ type Filter = 'all' | 'draft' | 'submitted' | 'cancelled';
 const FILTERS: Filter[] = ['all', 'draft', 'submitted', 'cancelled'];
 
 export function Cards({ initialStatus }: { initialStatus?: string }) {
-  const { t, syncState } = useStore();
+  const { t, syncState, caps } = useStore();
+  const toast = useToast();
   const [filter, setFilter] = useState<Filter>(
     (FILTERS.includes(initialStatus as Filter) ? initialStatus : 'all') as Filter,
   );
@@ -27,6 +31,8 @@ export function Cards({ initialStatus }: { initialStatus?: string }) {
   const [cards, setCards] = useState<CardSummary[] | null>(null);
   const [queued, setQueued] = useState<OutboxOp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirm, setConfirm] = useState<CardSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,66 +153,142 @@ export function Cards({ initialStatus }: { initialStatus?: string }) {
     });
   }, [merged, filter, query]);
 
+  /** A submitted card can't be deleted (it holds a Material Issue). A local card
+   *  is always removable; a synced card needs the delete capability. */
+  const canDelete = (card: CardSummary): boolean =>
+    card.docstatus !== 1 && (!!card.pending || caps.delete);
+
+  const doDelete = async () => {
+    const card = confirm;
+    setConfirm(null);
+    if (!card || deleting) return;
+
+    // A card that only lives in the outbox — drop its queued ops, no server call.
+    if (card.pending) {
+      await sync.discardLocalCard(card.name);
+      setQueued(await sync.pending());
+      toast.ok(t('card_deleted'));
+      return;
+    }
+
+    if (!syncState.online) {
+      toast.err(t('delete_needs_online'));
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteCard(card.name);
+      const next = (cards ?? []).filter((c) => c.name !== card.name);
+      setCards(next);
+      await kvSet(KEY_CARDS, next);
+      toast.ok(t('card_deleted'));
+    } catch (error) {
+      toast.err(error instanceof ApiError ? error.message : t('error_generic'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <div className="pane">
-      <div className="pad" style={{ paddingTop: 12 }}>
-        <div className="control" style={{ marginBottom: 12 }}>
-          <IconSearch />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('search_cards')}
-            inputMode="search"
-            autoComplete="off"
-          />
-          {query ? (
-            <button
-              className="iconbtn plain"
-              style={{ width: 26, height: 26 }}
-              onClick={() => setQuery('')}
-              aria-label={t('clear')}
-            >
-              <IconX size="sm" />
-            </button>
-          ) : null}
-        </div>
+    <>
+      <div className="pane">
+        <div className="pad" style={{ paddingTop: 12 }}>
+          <div className="control" style={{ marginBottom: 12 }}>
+            <IconSearch />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('search_cards')}
+              inputMode="search"
+              autoComplete="off"
+            />
+            {query ? (
+              <button
+                className="iconbtn plain"
+                style={{ width: 26, height: 26 }}
+                onClick={() => setQuery('')}
+                aria-label={t('clear')}
+              >
+                <IconX size="sm" />
+              </button>
+            ) : null}
+          </div>
 
-        <div className="fbar">
-          {FILTERS.map((option) => (
-            <button
-              key={option}
-              className={`fpill${filter === option ? ' active' : ''}`}
-              onClick={() => setFilter(option)}
-            >
-              {t(option)}
-              <span className="n">{counts[option]}</span>
-            </button>
-          ))}
-        </div>
+          <div className="fbar">
+            {FILTERS.map((option) => (
+              <button
+                key={option}
+                className={`fpill${filter === option ? ' active' : ''}`}
+                onClick={() => setFilter(option)}
+              >
+                {t(option)}
+                <span className="n">{counts[option]}</span>
+              </button>
+            ))}
+          </div>
 
-        {loading && !cards ? (
-          <Skeleton height={72} count={5} />
-        ) : !visible.length ? (
-          <EmptyState icon={<IconLayers />} title={t('no_cards')} body={t('no_cards_hint')} />
-        ) : (
-          visible.map((card) => <CardRow key={card.name} card={card} t={t} />)
-        )}
+          {loading && !cards ? (
+            <Skeleton height={72} count={5} />
+          ) : !visible.length ? (
+            <EmptyState icon={<IconLayers />} title={t('no_cards')} body={t('no_cards_hint')} />
+          ) : (
+            visible.map((card) => (
+              <CardRow
+                key={card.name}
+                card={card}
+                t={t}
+                deletable={canDelete(card)}
+                onDelete={setConfirm}
+              />
+            ))
+          )}
+        </div>
       </div>
-    </div>
+
+      <Confirm
+        open={!!confirm}
+        title={t('delete_card_title')}
+        body={t('delete_card_body', {
+          name: confirm && !confirm.pending ? confirm.name : t('draft'),
+        })}
+        confirmLabel={t('delete')}
+        cancelLabel={t('cancel')}
+        danger
+        onConfirm={doDelete}
+        onCancel={() => setConfirm(null)}
+      />
+    </>
   );
 }
 
 function CardRow({
   card,
   t,
+  deletable,
+  onDelete,
 }: {
   card: CardSummary;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  deletable: boolean;
+  onDelete: (card: CardSummary) => void;
 }) {
   const where = [card.village, card.zone].filter(Boolean).join(' · ');
+  const openCard = () => navigate({ name: 'card', id: card.name });
 
   return (
-    <button className="crow" onClick={() => navigate({ name: 'card', id: card.name })}>
+    <div
+      className="crow"
+      role="button"
+      tabIndex={0}
+      onClick={openCard}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openCard();
+        }
+      }}
+    >
       <div className="idwrap">
         <div className="cid">{card.pending ? t('draft').toUpperCase() : card.name}</div>
         <div className="cmeta">
@@ -221,6 +303,18 @@ function CardRow({
           {fmtWhen(card.modified)}
         </span>
       </div>
-    </button>
+      {deletable ? (
+        <button
+          className="crow-del"
+          aria-label={t('delete_card')}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(card);
+          }}
+        >
+          <IconTrash size="sm" />
+        </button>
+      ) : null}
+    </div>
   );
 }

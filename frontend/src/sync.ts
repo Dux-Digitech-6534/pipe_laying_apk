@@ -43,6 +43,29 @@ export async function resolveLocalName(local: string): Promise<string | null> {
 // signal after a long shift still syncs promptly.
 const BACKOFF = [0, 5_000, 15_000, 60_000, 300_000];
 
+/** When signed out there is nothing to retry until the user signs in, so don't
+ *  hammer the server — but check back soon enough that a sign-in made in another
+ *  tab is picked up. */
+const BACKOFF_SIGNED_OUT = 60_000;
+
+/** A CSRF mismatch means this page was loaded under a different session than the
+ *  one now in the cookie (signed out and back in while the app stayed open, which
+ *  an installed app does readily: it is never really closed). A reload re-fetches
+ *  the shell with the right token; the outbox lives in IndexedDB and survives it.
+ *  Guarded so a failure that persists can never become a reload loop — and kept
+ *  rare (10 minutes), because a reload also drops a form someone is half-way
+ *  through filling in. One reload is all a genuinely stale token ever needs. */
+function reloadForFreshToken(): void {
+  try {
+    const last = Number(sessionStorage.getItem('plm.csrfReloadAt') ?? 0);
+    if (Date.now() - last < 10 * 60_000) return;
+    sessionStorage.setItem('plm.csrfReloadAt', String(Date.now()));
+  } catch {
+    return; // can't remember we already tried, so don't risk looping
+  }
+  window.location.reload();
+}
+
 type Listener = (state: SyncState) => void;
 
 class SyncEngine {
@@ -54,6 +77,7 @@ class SyncEngine {
     failed: 0,
     lastSyncAt: null,
     lastError: null,
+    authRequired: false,
   };
 
   /** Set once a flush has been asked for while one was already running. */
@@ -110,6 +134,12 @@ class SyncEngine {
 
   getState(): SyncState {
     return this.state;
+  }
+
+  /** The store reports what the boot-time session check found, so the sign-in
+   *  gate and the sync engine always agree on one answer. */
+  setAuthRequired(required: boolean): void {
+    if (this.state.authRequired !== required) this.patch({ authRequired: required });
   }
 
   private emit(): void {
@@ -207,6 +237,21 @@ class SyncEngine {
     this.emit();
   }
 
+  /** Delete a card that only exists in the outbox (never synced): drop its
+   *  save_card op plus any laying/submit ops that reference it. Used by the list
+   *  Delete action so a local-only card can be removed with no server round trip. */
+  async discardLocalCard(localName: string): Promise<void> {
+    for (const op of await outboxAll()) {
+      const isSave = op.kind === 'save_card' && op.localName === localName;
+      const isDependent =
+        (op.kind === 'add_laying_batch' || op.kind === 'submit_card') &&
+        op.pourCard === localName;
+      if (isSave || isDependent) await outboxDelete(op.id);
+    }
+    await this.refreshCounts();
+    this.emit();
+  }
+
   /** Put a failed op back in the queue — for after the user fixed the cause
    *  (e.g. a master record that was missing has now been created). */
   async retry(opId: string): Promise<void> {
@@ -238,16 +283,27 @@ class SyncEngine {
     if (!ops.length) {
       await this.refreshCounts();
       this.emit();
+      // Nothing to send — but if we last saw "signed out", a ping tells us whether
+      // that is still true (signed in from another tab, or a captive-portal page
+      // misread at boot), so the banner can't outlive the problem it reports.
+      if (this.state.authRequired) await this.probe();
       return;
     }
 
     this.patch({ syncing: true });
 
+    // Where a failure happens says what it means: a dead session is refused at
+    // the ping (every method needs a login), a stale CSRF token on the write.
+    let stage: 'ping' | 'send' = 'ping';
+
     try {
       // Confirm the connection is real before sending a payload that may hold
       // a whole shift's data.
       await pingServer();
-      this.patch({ online: true });
+      stage = 'send';
+      // A ping that comes back means the session is alive — clear any earlier
+      // "signed out" verdict (e.g. a captive-portal page misread at boot).
+      this.patch({ online: true, authRequired: false });
 
       const { results, resolved } = await syncOutbox(ops);
 
@@ -302,23 +358,38 @@ class SyncEngine {
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
       const offline = apiError?.kind === 'network';
+      // Signed out: the ping itself was refused as unauthenticated. That is not
+      // the entries' fault and cannot be retried into working, so don't count it
+      // against them — and don't show Frappe's "function is not whitelisted"
+      // text, which tells a field user nothing. The UI keys off authRequired.
+      const signedOut =
+        stage === 'ping' && (apiError?.kind === 'auth' || apiError?.kind === 'permission');
+      const staleToken = apiError?.kind === 'csrf';
 
       this.patch({
         online: offline ? false : this.state.online,
-        lastError: apiError?.message ?? 'Sync failed',
+        authRequired: signedOut ? true : this.state.authRequired,
+        lastError: signedOut ? null : (apiError?.message ?? 'Sync failed'),
       });
 
-      // Nothing was consumed — bump attempts so the backoff grows, but keep
-      // every op queued.
-      for (const op of ops) {
-        const attempts = op.attempts + 1;
-        await outboxPut({ ...op, attempts, status: 'queued', lastError: apiError?.message });
+      if (signedOut) {
+        // Every op stays queued exactly as it was; it drains after a sign-in.
+        this.nextAttemptAt = Date.now() + BACKOFF_SIGNED_OUT;
+      } else {
+        // Nothing was consumed — bump attempts so the backoff grows, but keep
+        // every op queued.
+        for (const op of ops) {
+          const attempts = op.attempts + 1;
+          await outboxPut({ ...op, attempts, status: 'queued', lastError: apiError?.message });
+        }
+
+        const worst = Math.min(
+          ...ops.map((op) => Math.min(op.attempts, BACKOFF.length - 1)),
+        );
+        this.nextAttemptAt = Date.now() + BACKOFF[Math.max(1, worst)];
       }
 
-      const worst = Math.min(
-        ...ops.map((op) => Math.min(op.attempts, BACKOFF.length - 1)),
-      );
-      this.nextAttemptAt = Date.now() + BACKOFF[Math.max(1, worst)];
+      if (staleToken) reloadForFreshToken();
     } finally {
       await this.refreshCounts();
       this.patch({ syncing: false });
@@ -390,10 +461,14 @@ class SyncEngine {
   async probe(): Promise<boolean> {
     try {
       await pingServer();
-      this.patch({ online: true });
+      this.patch({ online: true, authRequired: false });
       return true;
-    } catch {
-      this.patch({ online: false });
+    } catch (error) {
+      // A refused ping is not "offline": the server answered, it just wants a
+      // sign-in. Conflating the two sent signed-out users down the wrong path.
+      const signedOut =
+        error instanceof ApiError && (error.kind === 'auth' || error.kind === 'permission');
+      this.patch(signedOut ? { online: true, authRequired: true } : { online: false });
       return false;
     }
   }

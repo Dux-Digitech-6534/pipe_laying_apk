@@ -144,6 +144,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setCaps(freshCaps);
         setNeedsLogin(false);
+        sync.setAuthRequired(false);
         await kvSet(KEY_CAPS, freshCaps);
       } catch (error) {
         if (cancelled) return;
@@ -154,6 +155,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (error.kind === 'auth' || error.kind === 'permission')
         ) {
           setNeedsLogin(true);
+          // Also tell the sync engine. With cached capabilities the app still
+          // looks usable, so without this the user would carry on entering work
+          // that can never reach the server and never be told why.
+          sync.setAuthRequired(true);
         }
       }
 

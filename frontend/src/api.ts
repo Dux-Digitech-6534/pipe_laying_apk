@@ -29,6 +29,7 @@ export const API = {
   addLayingBatch: PREFIX + 'add_laying_batch',
   updateLayingBatch: PREFIX + 'update_laying_batch',
   deleteLayingBatch: PREFIX + 'delete_laying_batch',
+  deleteCard: PREFIX + 'delete_card',
   submitCard: PREFIX + 'submit_card',
   calcBackfilling: PREFIX + 'calc_backfilling',
   checkDuplicate: PREFIX + 'check_duplicate',
@@ -70,7 +71,7 @@ export const boot: BootInfo =
 export class ApiError extends Error {
   constructor(
     message: string,
-    readonly kind: 'network' | 'auth' | 'permission' | 'validation' | 'server',
+    readonly kind: 'network' | 'auth' | 'permission' | 'validation' | 'server' | 'csrf',
     readonly status?: number,
   ) {
     super(message);
@@ -129,6 +130,13 @@ function readableError(body: unknown, fallback: string): string {
 function classify(status: number, body: unknown): ApiError {
   const message = readableError(body, `Request failed (${status})`);
 
+  // Frappe answers a mismatched CSRF token with 400 + exc_type CSRFTokenError.
+  // That is a session-token problem (this page was loaded under a different
+  // session than the one now in the cookie), not bad data — a reload fixes it.
+  if ((body as { exc_type?: string } | null)?.exc_type === 'CSRFTokenError') {
+    return new ApiError(message, 'csrf', status);
+  }
+
   if (status === 401 || status === 403) {
     const looksLikeAuth = /log\s?in|session|expired|not permitted/i.test(message);
     return new ApiError(message, looksLikeAuth ? 'auth' : 'permission', status);
@@ -182,10 +190,14 @@ export async function call<T>(
   }
 
   let response: Response;
+  let text: string;
   try {
     response = await fetch(url, init);
+    // Read the body INSIDE the timeout. A connection that stalls after the
+    // headers would otherwise hang here forever — and a hung call wedges the
+    // sync engine's "syncing" flag, so nothing would ever sync again.
+    text = await response.text();
   } catch (error) {
-    clearTimeout(timer);
     const aborted = error instanceof DOMException && error.name === 'AbortError';
     throw new ApiError(
       aborted ? 'Request timed out' : 'No connection',
@@ -196,7 +208,6 @@ export async function call<T>(
   }
 
   let body: unknown = null;
-  const text = await response.text();
   if (text) {
     try {
       body = JSON.parse(text);
@@ -315,6 +326,15 @@ export const deleteLayingBatch = (pourCard: string, pipeId: string) =>
   call<{ name: string; docstatus: 0 | 1 | 2; removed: string; total_quantity?: number }>(
     API.deleteLayingBatch,
     { pour_card: pourCard, pipe_id: pipeId },
+    { post: true, timeoutMs: 30000 },
+  );
+
+/** Delete a whole Pour Card (draft or cancelled). Online-only — the server
+ *  removes the document; a submitted card is rejected (cancel it on desk first). */
+export const deleteCard = (name: string) =>
+  call<{ name: string; deleted: boolean; missing?: boolean }>(
+    API.deleteCard,
+    { name },
     { post: true, timeoutMs: 30000 },
   );
 

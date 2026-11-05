@@ -12,7 +12,16 @@ import { useStore } from '../store';
 import { Mark } from '../components/Mark';
 import { IconLock, IconLogout, IconUser } from '../icons';
 
-export function Login({ reason }: { reason?: 'expired' | 'guest' }) {
+interface LoginProps {
+  reason?: 'expired' | 'guest';
+  /** Entries still on this phone. Shown so the user knows signing in is what
+   *  sends them — and that nothing they recorded has been lost. */
+  pending?: number;
+  /** Offered only when the app has cached data to keep working from. */
+  onSkip?: () => void;
+}
+
+export function Login({ reason, pending = 0, onSkip }: LoginProps) {
   const { t } = useStore();
 
   const [email, setEmail] = useState('');
@@ -57,6 +66,12 @@ export function Login({ reason }: { reason?: 'expired' | 'guest' }) {
         <p className="lead">
           {reason === 'expired' ? t('session_expired') : t('login_lead')}
         </p>
+
+        {pending > 0 ? (
+          <div className="login-pending" role="status">
+            {t('login_pending', { n: pending })}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="login-err" role="alert">
@@ -123,6 +138,12 @@ export function Login({ reason }: { reason?: 'expired' | 'guest' }) {
             </>
           )}
         </button>
+
+        {onSkip ? (
+          <button type="button" className="login-skip" onClick={onSkip} disabled={busy}>
+            {t('continue_offline')}
+          </button>
+        ) : null}
 
         <div className="foot">
           {t('brand_sub')} · <b>DUX Digitech</b>

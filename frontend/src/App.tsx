@@ -42,6 +42,13 @@ export function App() {
   const [queued, setQueued] = useState<OutboxOp[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
 
+  // The user chose "continue offline" at the sign-in gate for this app run. Reset
+  // whenever the session is healthy again, so the next lapse asks again.
+  const [loginSkipped, setLoginSkipped] = useState(false);
+  useEffect(() => {
+    if (!syncState.authRequired) setLoginSkipped(false);
+  }, [syncState.authRequired]);
+
   // Whether this device has ever held a session, so the sign-in screen can tell
   // "you were signed out" apart from "you were never signed in".
   const [hadSession] = useState(() => localStorage.getItem('plm.hadSession') === '1');
@@ -150,17 +157,31 @@ export function App() {
   // No session AND nothing cached to work from: the only useful thing to offer
   // is a way in. If capabilities WERE cached, the user has a usable offline app
   // and shouldn't be pushed to a login page they may not be able to reach.
-  if (needsLogin && !caps.user) {
-    // "Expired" is only true if this device had a session before. A first-time
-    // visitor just needs to sign in, and telling them something expired is wrong.
-    return <Login reason={hadSession ? 'expired' : 'guest'} />;
+  const neverSignedIn = needsLogin && !caps.user;
+
+  // The other case: a session that DIED UNDER a working app. Capabilities are
+  // cached, so the app looks perfectly healthy — but every request is refused,
+  // entries pile up in the outbox and none ever reaches the server. Say so, and
+  // offer the way back in. The queued entries are untouched by signing in; the
+  // page reloads and they drain on their own. "Continue offline" keeps the app
+  // usable for the user who is in a trench and just wants to keep recording.
+  if (neverSignedIn || (syncState.authRequired && !loginSkipped)) {
+    return (
+      <Login
+        // "Expired" is only true if this device had a session before. A first-time
+        // visitor just needs to sign in, and telling them something expired is wrong.
+        reason={neverSignedIn && !hadSession ? 'guest' : 'expired'}
+        pending={syncState.queued + syncState.failed}
+        onSkip={neverSignedIn ? undefined : () => setLoginSkipped(true)}
+      />
+    );
   }
 
   return (
     <ToastHost>
       <div className="shell">
         <AppBar route={route} card={card} />
-        <SyncBar />
+        <SyncBar onSignIn={() => setLoginSkipped(false)} />
         <Screen
           route={route}
           card={card}
@@ -224,12 +245,27 @@ function AppBar({ route, card }: { route: Route; card: CardDetail | null }) {
 
 /** One-line connection + queue state. Only shown when there is something to
  *  say — a permanently visible "online" strip is noise. */
-function SyncBar() {
+function SyncBar({ onSignIn }: { onSignIn: () => void }) {
   const { t, syncState } = useStore();
 
   const offline = !syncState.online;
   const hasQueue = syncState.queued > 0;
   const hasFailed = syncState.failed > 0;
+
+  // Signed out under a running app: nothing can sync. "N waiting to sync" alone
+  // would read as "it will go through on its own" — so say what is needed.
+  if (syncState.authRequired && !offline) {
+    return (
+      <div className="syncbar err">
+        <IconAlert />
+        <span>
+          {hasQueue ? t('signin_to_sync_n', { n: syncState.queued }) : t('signin_to_sync')}
+        </span>
+        <span className="spacer" />
+        <button onClick={onSignIn}>{t('sign_in')}</button>
+      </div>
+    );
+  }
 
   if (!offline && !hasQueue && !hasFailed && !syncState.syncing) return null;
 

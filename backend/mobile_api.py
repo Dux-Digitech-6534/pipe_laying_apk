@@ -391,6 +391,7 @@ def capabilities():
         "write": bool(frappe.has_permission("Pour Card", "write")),
         "submit": bool(frappe.has_permission("Pour Card", "submit")),
         "cancel": bool(frappe.has_permission("Pour Card", "cancel")),
+        "delete": bool(frappe.has_permission("Pour Card", "delete")),
         "default_company": _default_company(),
     }
 
@@ -973,6 +974,36 @@ def delete_laying_batch(pour_card, pipe_id):
         "removed": pipe_id,
         "total_quantity": flt(doc.total_quantity),
     }
+
+
+@frappe.whitelist()
+def delete_card(name):
+    """Delete a whole Pour Card — the list-screen 'Delete' action.
+
+    Draft or cancelled only: a SUBMITTED card has a linked Material Issue Stock
+    Entry and must be cancelled first (exactly like the desk). Permission-checked
+    ('delete'); frappe.delete_doc enforces it again and guards link integrity.
+
+    Idempotent for the offline/retry case: a card that's already gone reports
+    success so the client can retire the action instead of erroring.
+    """
+    if not frappe.db.exists("Pour Card", name):
+        return {"name": name, "deleted": True, "missing": True}
+
+    doc = frappe.get_doc("Pour Card", name)
+
+    if cint(doc.docstatus) == 1:
+        frappe.throw(
+            _("A submitted Pour Card cannot be deleted. Cancel it first."),
+            title=_("Cannot Delete"),
+        )
+
+    doc.check_permission("delete")
+
+    frappe.delete_doc("Pour Card", name)
+    frappe.db.commit()
+
+    return {"name": name, "deleted": True}
 
 
 @frappe.whitelist()

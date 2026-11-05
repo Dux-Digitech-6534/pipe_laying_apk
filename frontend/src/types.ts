@@ -47,6 +47,7 @@ export interface Capabilities {
   write: boolean;
   submit: boolean;
   cancel: boolean;
+  delete: boolean;
   default_company: string | null;
 }
 
@@ -60,6 +61,7 @@ export const DENY_ALL: Capabilities = {
   write: false,
   submit: false,
   cancel: false,
+  delete: false,
   default_company: null,
 };
 
@@ -249,4 +251,8 @@ export interface SyncState {
   failed: number;
   lastSyncAt: number | null;
   lastError: string | null;
+  /** The server rejected us as not signed in (session expired, or signed out
+   *  elsewhere). Nothing can sync until the user signs in again; the outbox is
+   *  untouched and drains on its own once they do. */
+  authRequired: boolean;
 }

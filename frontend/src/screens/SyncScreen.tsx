@@ -40,6 +40,12 @@ export function SyncScreen() {
   const waiting = ops.filter((op) => !op.permanent);
 
   const flushNow = async () => {
+    if (syncState.authRequired) {
+      // Syncing can't succeed until the user signs in. Reloading re-runs the boot
+      // session check, which opens the sign-in gate (the queue is untouched).
+      window.location.assign('/pipe-laying/m');
+      return;
+    }
     const reachable = await sync.probe();
     if (!reachable) {
       toast.err(t('offline'));
@@ -89,17 +95,24 @@ export function SyncScreen() {
             <div style={{ fontSize: 17, fontWeight: 650 }}>
               {!syncState.online
                 ? t('offline')
-                : syncState.syncing
-                  ? t('syncing')
-                  : waiting.length
-                    ? t('queued_n', { n: waiting.length })
-                    : t('synced')}
+                : syncState.authRequired
+                  ? t('signin_to_sync')
+                  : syncState.syncing
+                    ? t('syncing')
+                    : waiting.length
+                      ? t('queued_n', { n: waiting.length })
+                      : t('synced')}
             </div>
 
             <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 5 }}>
-              {syncState.lastSyncAt
-                ? t('last_synced', { when: fmtWhen(syncState.lastSyncAt) })
-                : t('nothing_queued_hint')}
+              {syncState.authRequired
+                ? t('session_expired_sync')
+                : syncState.lastSyncAt
+                  ? t('last_synced', { when: fmtWhen(syncState.lastSyncAt) })
+                  : ops.length
+                    ? // Never claim "everything reached the server" while entries wait.
+                      t('waiting_hint')
+                    : t('nothing_queued_hint')}
             </div>
 
             {syncState.lastError && syncState.online ? (
@@ -112,10 +125,10 @@ export function SyncScreen() {
               className="btn primary"
               style={{ marginTop: 18 }}
               onClick={flushNow}
-              disabled={syncState.syncing || !ops.length}
+              disabled={syncState.syncing || (!ops.length && !syncState.authRequired)}
             >
               <IconRefresh />
-              <span>{t('sync_now')}</span>
+              <span>{syncState.authRequired ? t('sign_in') : t('sync_now')}</span>
             </button>
           </div>
 

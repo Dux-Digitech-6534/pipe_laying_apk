@@ -250,6 +250,24 @@ const en: Dict = {
   edit_note: 'Saving replaces this entry and recomputes the totals.',
   delete_entry_title: 'Delete this entry?',
   delete_entry_body: 'Remove {name} and all its rows from this card? This cannot be undone.',
+
+  // delete a whole card (from the list)
+  delete_card: 'Delete card',
+  delete_card_title: 'Delete this Pour Card?',
+  delete_card_body: 'Delete {name} and everything on it? This cannot be undone.',
+  card_deleted: 'Pour Card deleted',
+  delete_needs_online: 'Deleting needs a connection — try again when online.',
+
+  // signed out under a working app (session lapsed; entries are safe on the phone)
+  signin_to_sync: 'Signed out — sign in to sync',
+  signin_to_sync_n: 'Signed out — sign in to send {n} waiting',
+  session_expired_sync:
+    'Your sign-in has expired, so nothing can be sent. Sign in again — everything on this phone is kept.',
+  login_pending: '{n} waiting on this phone. Sign in and they will be sent automatically.',
+  continue_offline: 'Continue offline',
+  waiting_hint: 'Saved on this phone — they are sent as soon as the connection allows.',
+  sign_out_pending:
+    '{n} entries on this phone have not been sent yet. They stay saved here and are sent after you sign in again.',
 };
 
 const hi: Dict = {
@@ -485,6 +503,23 @@ const hi: Dict = {
   edit_note: 'सेव करने पर ये एंट्री बदल जाती है और totals दोबारा जुड़ते हैं।',
   delete_entry_title: 'ये एंट्री डिलीट करें?',
   delete_entry_body: '{name} और इसकी सारी rows इस कार्ड से हटा दें? ये वापस नहीं होगा।',
+
+  // delete a whole card (from the list)
+  delete_card: 'कार्ड डिलीट करें',
+  delete_card_title: 'यह पोर कार्ड डिलीट करें?',
+  delete_card_body: '{name} और इसका सारा डेटा डिलीट करें? ये वापस नहीं होगा।',
+  card_deleted: 'पोर कार्ड डिलीट हो गया',
+  delete_needs_online: 'डिलीट के लिए कनेक्शन ज़रूरी है — ऑनलाइन होने पर फिर कोशिश करें।',
+
+  signin_to_sync: 'साइन आउट — सिंक के लिए साइन इन करें',
+  signin_to_sync_n: 'साइन आउट — {n} एंट्री भेजने के लिए साइन इन करें',
+  session_expired_sync:
+    'आपका साइन-इन खत्म हो गया है, इसलिए कुछ भेजा नहीं जा सकता। दोबारा साइन इन करें — इस फोन की सारी एंट्री सुरक्षित हैं।',
+  login_pending: 'इस फोन में {n} एंट्री बाकी हैं। साइन इन करते ही अपने-आप भेज दी जाएँगी।',
+  continue_offline: 'ऑफलाइन जारी रखें',
+  waiting_hint: 'इस फोन में सुरक्षित हैं — कनेक्शन मिलते ही भेज दी जाएँगी।',
+  sign_out_pending:
+    'इस फोन की {n} एंट्री अभी भेजी नहीं गई हैं। वे यहीं सुरक्षित रहेंगी और दोबारा साइन इन करने पर भेज दी जाएँगी।',
 };
 
 const DICTS: Record<Lang, Dict> = { en, hi };
